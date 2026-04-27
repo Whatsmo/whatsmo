@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="whatsmo_green">#FF008069</color>
+    <color name="whatsmo_green_dark">#FF075E54</color>
+    <color name="whatsmo_paper">#FFFBFBF6</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>
