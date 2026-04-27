@@ -93,7 +93,7 @@ Legend:
 - [x] Message dedupe by WhatsApp message ID
 - [x] Read/delivery/played receipt bridge into message status UI
 - [x] Typing indicator bridge from `Event::ChatPresence`
-- [ ] WhatsApp history sync on first login/resume
+- [x] WhatsApp history sync on first login/resume for conversation summaries and recent text/caption messages
 - [ ] Pagination/loading older messages
 - [ ] Real chat search/filtering; the search field is currently visual only
 - [ ] Group metadata sync: subject, participant list, admin state, group avatar
