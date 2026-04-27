@@ -29,6 +29,8 @@ import {
 const now = Date.now();
 const STORAGE_KEY = 'whatsmo.chat-state.v1';
 const MAX_PERSISTED_MESSAGES_PER_CHAT = 120;
+const queuedRetryKeys = new Set<string>();
+let queuedRetryTimer: number | undefined;
 
 const contacts: ContactProfile[] = [
   {
@@ -217,6 +219,10 @@ export function setConnection(payload: ConnectionPayload): void {
       message: payload.message
     }
   }));
+
+  if (payload.connected) {
+    scheduleQueuedMessageRetry();
+  }
 }
 
 export function setSessionStatus(payload: SessionStatusPayload): void {
@@ -243,6 +249,10 @@ export function setSessionStatus(payload: SessionStatusPayload): void {
       }
     };
   });
+
+  if (payload.connected) {
+    scheduleQueuedMessageRetry();
+  }
 }
 
 export async function refreshSessionStatus(): Promise<void> {
@@ -340,6 +350,46 @@ export async function sendMessage(chatId: string, text: string): Promise<void> {
   } catch (error) {
     markMessageStatus(chatId, optimistic.id, 'failed');
     console.error('Failed to send message', error);
+  }
+}
+
+export async function retryMessage(chatId: string, messageId: string): Promise<void> {
+  const message = get(appState).messages[chatId]?.find((item) => item.id === messageId);
+  if (!message?.text || !message.fromMe || message.deleted) {
+    return;
+  }
+
+  const retryKey = queueKey(chatId, messageId);
+  if (queuedRetryKeys.has(retryKey)) {
+    return;
+  }
+
+  queuedRetryKeys.add(retryKey);
+  markMessageStatus(chatId, messageId, 'queued');
+
+  try {
+    const sent = await sendTextMessage(chatId, message.text);
+    markMessageStatus(chatId, messageId, 'sent', sent.id);
+  } catch (error) {
+    markMessageStatus(chatId, messageId, 'failed');
+    console.error('Failed to retry queued message', error);
+  } finally {
+    queuedRetryKeys.delete(retryKey);
+  }
+}
+
+export async function retryQueuedMessages(chatId?: string): Promise<void> {
+  const state = get(appState);
+  const candidates = Object.entries(state.messages)
+    .filter(([candidateChatId]) => !chatId || candidateChatId === chatId)
+    .flatMap(([candidateChatId, chatMessages]) =>
+      chatMessages
+        .filter(isRetryableOutgoingMessage)
+        .map((message) => ({ chatId: candidateChatId, messageId: message.id }))
+    );
+
+  for (const candidate of candidates) {
+    await retryMessage(candidate.chatId, candidate.messageId);
   }
 }
 
@@ -594,6 +644,31 @@ function markMessageStatus(chatId: string, localId: string, status: ChatMessage[
       )
     }
   }));
+}
+
+function scheduleQueuedMessageRetry(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.clearTimeout(queuedRetryTimer);
+  queuedRetryTimer = window.setTimeout(() => {
+    void retryQueuedMessages();
+  }, 800);
+}
+
+function isRetryableOutgoingMessage(message: ChatMessage): boolean {
+  return (
+    message.fromMe &&
+    !message.deleted &&
+    typeof message.text === 'string' &&
+    message.text.trim().length > 0 &&
+    (message.status === 'failed' || message.status === 'queued')
+  );
+}
+
+function queueKey(chatId: string, messageId: string): string {
+  return `${chatId}:${messageId}`;
 }
 
 function createInitialState(): AppModel {

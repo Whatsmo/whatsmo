@@ -2,10 +2,12 @@
   import type { ChatMessage } from '$lib/api/types';
 
   export let message: ChatMessage;
+  export let onRetry: (message: ChatMessage) => void = () => undefined;
 
   const formatter = new Intl.DateTimeFormat('en', { hour: '2-digit', minute: '2-digit' });
 
   $: ticks = message.status === 'failed' ? '!' : message.status === 'queued' ? '◷' : '✓✓';
+  $: canRetry = message.fromMe && message.status === 'failed' && Boolean(message.text) && !message.deleted;
 </script>
 
 <article class:mine={message.fromMe} class="bubble">
@@ -29,6 +31,9 @@
       <span class:read={message.status === 'read'}>{ticks}</span>
     {/if}
   </footer>
+  {#if canRetry}
+    <button class="retry-button" on:click={() => onRetry(message)}>Retry</button>
+  {/if}
 </article>
 
 <style>
@@ -77,6 +82,22 @@
   .deleted {
     color: #667781;
     font-style: italic;
+  }
+
+  .retry-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 30px;
+    margin-top: 7px;
+    border: 0;
+    border-radius: 999px;
+    padding: 0 12px;
+    color: white;
+    font: inherit;
+    font-size: 0.74rem;
+    font-weight: 900;
+    background: #b3261e;
   }
 
   .media-card {

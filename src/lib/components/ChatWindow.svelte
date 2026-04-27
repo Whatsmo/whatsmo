@@ -7,6 +7,7 @@
   export let messages: ChatMessage[] = [];
   export let onBack: () => void = () => undefined;
   export let onSend: (chatId: string, text: string) => void;
+  export let onRetry: (chatId: string, messageId: string) => void = () => undefined;
   export let onAttach: () => void;
 </script>
 
@@ -25,7 +26,7 @@
   <div class="message-field">
     <div class="day-chip">Today</div>
     {#each messages as message (message.id)}
-      <MessageBubble {message} />
+      <MessageBubble {message} onRetry={() => onRetry(chat.id, message.id)} />
     {/each}
   </div>
 
