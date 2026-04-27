@@ -99,7 +99,7 @@ Legend:
 - [ ] Group metadata sync: subject, participant list, admin state, group avatar
 - [x] Message edit and delete/revoke handling for live message events
 - [ ] Quoted replies, reactions, forwarded labels, polls, location, contacts, and stickers
-- [ ] Robust offline queue/retry for outgoing messages
+- [x] Text-message offline queue/retry for failed or queued outgoing messages
 
 ### Contacts and profiles
 
