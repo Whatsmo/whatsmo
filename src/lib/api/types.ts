@@ -33,6 +33,7 @@ export interface AccountDevicePayload {
 export type ChatKind = 'direct' | 'group';
 export type MessageStatus = 'queued' | 'sent' | 'delivered' | 'read' | 'played' | 'failed';
 export type MediaKind = 'image' | 'video' | 'document' | 'audio';
+export type MessageEventKind = 'message' | 'edit' | 'revoke' | 'admin-revoke' | 'other';
 export type StatusPrivacy = 'contacts' | 'allowlist' | 'denylist';
 
 export interface ContactProfile {
@@ -60,6 +61,8 @@ export interface ChatMessage {
   timestamp: number;
   fromMe: boolean;
   status: MessageStatus;
+  deleted?: boolean;
+  edited?: boolean;
   media?: MediaAttachment;
 }
 
@@ -85,6 +88,8 @@ export interface IncomingMessagePayload {
   timestampMs: number;
   isGroup: boolean;
   fromMe: boolean;
+  eventKind: MessageEventKind;
+  targetMessageId?: string;
 }
 
 export interface HistorySyncPayload {

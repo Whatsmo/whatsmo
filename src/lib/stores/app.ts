@@ -344,6 +344,20 @@ export async function sendMessage(chatId: string, text: string): Promise<void> {
 }
 
 export function ingestIncomingMessage(payload: IncomingMessagePayload): void {
+  if (payload.eventKind === 'edit') {
+    applyMessageEdit(payload);
+    return;
+  }
+
+  if (payload.eventKind === 'revoke' || payload.eventKind === 'admin-revoke') {
+    applyMessageRevoke(payload);
+    return;
+  }
+
+  if (payload.eventKind === 'other') {
+    return;
+  }
+
   const message: ChatMessage = {
     id: payload.id,
     chatId: payload.chatId,
@@ -361,6 +375,52 @@ export function ingestIncomingMessage(payload: IncomingMessagePayload): void {
   if (state.notificationEnabled && chat && !payload.fromMe) {
     notifyNewMessage(chat.title, payload.text ?? 'New WhatsApp message');
   }
+}
+
+function applyMessageEdit(payload: IncomingMessagePayload): void {
+  const targetMessageId = payload.targetMessageId;
+  if (!targetMessageId) return;
+
+  appState.update((state) => {
+    const existingMessages = state.messages[payload.chatId] ?? [];
+    let changed = false;
+    const messages = existingMessages.map((message) => {
+      if (message.id !== targetMessageId) return message;
+      changed = true;
+      return {
+        ...message,
+        text: payload.text ?? message.text,
+        edited: true,
+        timestamp: Math.max(message.timestamp, payload.timestampMs)
+      };
+    });
+
+    if (!changed) return state;
+
+    return updateChatAfterMessageMutation(state, payload.chatId, messages);
+  });
+}
+
+function applyMessageRevoke(payload: IncomingMessagePayload): void {
+  const targetMessageId = payload.targetMessageId ?? payload.id;
+  appState.update((state) => {
+    const existingMessages = state.messages[payload.chatId] ?? [];
+    let changed = false;
+    const messages = existingMessages.map((message) => {
+      if (message.id !== targetMessageId) return message;
+      changed = true;
+      return {
+        ...message,
+        text: payload.eventKind === 'admin-revoke' ? 'This message was deleted by an admin.' : 'This message was deleted.',
+        deleted: true,
+        media: undefined
+      };
+    });
+
+    if (!changed) return state;
+
+    return updateChatAfterMessageMutation(state, payload.chatId, messages);
+  });
 }
 
 export function ingestHistorySync(payload: HistorySyncPayload): void {
@@ -490,6 +550,32 @@ function mergeMessages(existing: ChatMessage[], incoming: ChatMessage[]): ChatMe
   return Array.from(byId.values())
     .sort((left, right) => left.timestamp - right.timestamp)
     .slice(-MAX_PERSISTED_MESSAGES_PER_CHAT);
+}
+
+function updateChatAfterMessageMutation(
+  state: AppModel,
+  chatId: string,
+  messages: ChatMessage[]
+): AppModel {
+  const lastMessage = messages.at(-1);
+  return {
+    ...state,
+    chats: sortChats(
+      state.chats.map((chat) =>
+        chat.id === chatId
+          ? {
+              ...chat,
+              subtitle: lastMessage?.text ?? chat.subtitle,
+              lastMessageAt: lastMessage?.timestamp ?? chat.lastMessageAt
+            }
+          : chat
+      )
+    ),
+    messages: {
+      ...state.messages,
+      [chatId]: messages
+    }
+  };
 }
 
 function sortChats(chats: ChatSummary[]): ChatSummary[] {

@@ -9,17 +9,22 @@
 </script>
 
 <article class:mine={message.fromMe} class="bubble">
-  {#if message.media}
+  {#if message.deleted}
+    <p class="deleted">{message.text ?? 'This message was deleted.'}</p>
+  {:else if message.media}
     <div class="media-card">
       <span>{message.media.kind}</span>
       <strong>{message.media.name}</strong>
     </div>
   {/if}
-  {#if message.text}
+  {#if message.text && !message.deleted}
     <p>{message.text}</p>
   {/if}
   <footer>
     <time>{formatter.format(message.timestamp)}</time>
+    {#if message.edited && !message.deleted}
+      <em>edited</em>
+    {/if}
     {#if message.fromMe}
       <span class:read={message.status === 'read'}>{ticks}</span>
     {/if}
@@ -63,6 +68,15 @@
 
   footer span.read {
     color: #34b7f1;
+  }
+
+  footer em {
+    font-style: normal;
+  }
+
+  .deleted {
+    color: #667781;
+    font-style: italic;
   }
 
   .media-card {
