@@ -153,6 +153,29 @@ pub struct IncomingMessagePayload {
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct HistorySyncPayload {
+    chat_id: String,
+    title: String,
+    unread_count: u32,
+    last_message_at: i64,
+    is_group: bool,
+    messages: Vec<IncomingMessagePayload>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistorySyncProgressPayload {
+    active: bool,
+    total: i32,
+    processed: i32,
+    messages: i32,
+    notifications: i32,
+    receipts: i32,
+    message: String,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OutgoingMessagePayload {
     id: String,
     chat_id: String,
@@ -878,6 +901,47 @@ async fn start_session(
                         };
                         emit_event(&app, "whatsmo://message", payload);
                     }
+                    Event::JoinedGroup(conversation) => {
+                        if let Some(payload) = history_sync_payload(conversation) {
+                            emit_event(&app, "whatsmo://history-sync", payload);
+                        }
+                    }
+                    Event::OfflineSyncPreview(preview) => {
+                        emit_event(
+                            &app,
+                            "whatsmo://history-progress",
+                            HistorySyncProgressPayload {
+                                active: true,
+                                total: preview.total,
+                                processed: 0,
+                                messages: preview.messages,
+                                notifications: preview.notifications,
+                                receipts: preview.receipts,
+                                message: format!(
+                                    "Syncing {} offline WhatsApp items...",
+                                    preview.total
+                                ),
+                            },
+                        );
+                    }
+                    Event::OfflineSyncCompleted(completed) => {
+                        emit_event(
+                            &app,
+                            "whatsmo://history-progress",
+                            HistorySyncProgressPayload {
+                                active: false,
+                                total: completed.count,
+                                processed: completed.count,
+                                messages: completed.count,
+                                notifications: 0,
+                                receipts: 0,
+                                message: format!(
+                                    "Offline WhatsApp sync completed: {} items.",
+                                    completed.count
+                                ),
+                            },
+                        );
+                    }
                     Event::Receipt(receipt) => {
                         if let Some(status) = receipt_status(&receipt.r#type) {
                             for message_id in &receipt.message_ids {
@@ -1031,6 +1095,109 @@ fn receipt_status(receipt_type: &ReceiptType) -> Option<&'static str> {
         ReceiptType::Read | ReceiptType::ReadSelf => Some("read"),
         ReceiptType::Played | ReceiptType::PlayedSelf => Some("played"),
         _ => None,
+    }
+}
+
+fn history_sync_payload(
+    conversation: &wacore::types::events::LazyConversation,
+) -> Option<HistorySyncPayload> {
+    const MAX_HISTORY_MESSAGES_PER_CHAT: usize = 120;
+
+    let conversation = conversation.get_with_messages()?;
+    let chat_id = conversation.id.clone();
+    if chat_id.is_empty() {
+        return None;
+    }
+
+    let is_group = chat_id.contains("@g.us");
+    let mut messages = conversation
+        .messages
+        .iter()
+        .filter_map(|history_message| history_message.message.as_ref())
+        .filter_map(|message| history_message_payload(&chat_id, is_group, message))
+        .collect::<Vec<_>>();
+    messages.sort_by_key(|message| message.timestamp_ms);
+    if messages.len() > MAX_HISTORY_MESSAGES_PER_CHAT {
+        messages = messages.split_off(messages.len() - MAX_HISTORY_MESSAGES_PER_CHAT);
+    }
+
+    let last_message_at = conversation
+        .last_msg_timestamp
+        .or(conversation.conversation_timestamp)
+        .map(seconds_to_millis)
+        .or_else(|| messages.last().map(|message| message.timestamp_ms))
+        .unwrap_or_else(|| Utc::now().timestamp_millis());
+    let title = conversation
+        .name
+        .or(conversation.display_name)
+        .or(conversation.pn_jid)
+        .unwrap_or_else(|| chat_title_from_jid(&chat_id));
+
+    Some(HistorySyncPayload {
+        chat_id,
+        title,
+        unread_count: conversation.unread_count.unwrap_or(0),
+        last_message_at,
+        is_group,
+        messages,
+    })
+}
+
+fn history_message_payload(
+    fallback_chat_id: &str,
+    is_group: bool,
+    web_message: &wa::WebMessageInfo,
+) -> Option<IncomingMessagePayload> {
+    let message = web_message.message.as_ref()?;
+    let key = &web_message.key;
+    let chat_id = key
+        .remote_jid
+        .clone()
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| fallback_chat_id.to_string());
+    let from_me = key.from_me.unwrap_or(false);
+    let sender_id = if from_me {
+        "me".to_string()
+    } else if is_group {
+        key.participant
+            .clone()
+            .or_else(|| web_message.participant.clone())
+            .unwrap_or_else(|| chat_id.clone())
+    } else {
+        chat_id.clone()
+    };
+    let id = key.id.clone().filter(|value| !value.is_empty())?;
+    let text = message
+        .text_content()
+        .map(ToString::to_string)
+        .or_else(|| message.get_caption().map(ToString::to_string));
+
+    Some(IncomingMessagePayload {
+        id,
+        chat_id,
+        sender_id,
+        text,
+        timestamp_ms: web_message
+            .message_timestamp
+            .map(seconds_to_millis)
+            .unwrap_or_else(|| Utc::now().timestamp_millis()),
+        is_group,
+        from_me,
+    })
+}
+
+fn seconds_to_millis(seconds: u64) -> i64 {
+    seconds.saturating_mul(1000).min(i64::MAX as u64) as i64
+}
+
+fn chat_title_from_jid(jid: &str) -> String {
+    let user = jid.split('@').next().unwrap_or(jid);
+    if jid.contains("@g.us") {
+        format!("Group {user}")
+    } else if user.chars().all(|character| character.is_ascii_digit()) {
+        format!("+{user}")
+    } else {
+        user.to_string()
     }
 }
 
