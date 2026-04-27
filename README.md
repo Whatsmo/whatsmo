@@ -94,9 +94,9 @@ Legend:
 - [x] Read/delivery/played receipt bridge into message status UI
 - [x] Typing indicator bridge from `Event::ChatPresence`
 - [x] WhatsApp history sync on first login/resume for conversation summaries and recent text/caption messages
-- [ ] Pagination/loading older messages
-- [ ] Real chat search/filtering; the search field is currently visual only
-- [ ] Group metadata sync: subject, participant list, admin state, group avatar
+- [x] Local conversation pagination/loading older persisted messages
+- [x] Real chat search/filtering for title, subtitle, chat ID, unread chats, and groups
+- [x] Group metadata sync for subject, participant/admin counts, announcement/locked state, description, and participant list
 - [x] Message edit and delete/revoke handling for live message events
 - [ ] Quoted replies, reactions, forwarded labels, polls, location, contacts, and stickers
 - [x] Text-message offline queue/retry for failed or queued outgoing messages
@@ -106,9 +106,11 @@ Legend:
 - [x] Manual phone-number contact lookup through `client.contacts().get_info`
 - [x] Persist synced contacts locally
 - [x] Use synced contacts as selectable Status recipients
+- [x] Contact profile lookup through `client.contacts().get_user_info`
+- [x] Profile picture URL retrieval and local WebView caching for synced contacts/groups
+- [x] Auto-sync contact profiles from incoming and history-synced message JIDs
 - [ ] Full address-book/contact import from the Android device
 - [ ] Automatic contact sync requested by WhatsApp contact events
-- [ ] Profile picture retrieval and caching
 - [ ] Rich contact profile screen with business/status/about fields from WhatsApp
 - [ ] Contact number-change migration handling
 
