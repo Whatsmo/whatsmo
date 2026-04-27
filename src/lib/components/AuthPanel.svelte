@@ -163,13 +163,13 @@
     margin: 0;
     padding: 12px;
     border-radius: 18px;
-    color: #0b211a;
-    background: #e7f6ef;
+    color: var(--ink, #0b211a);
+    background: var(--auth-bg, #e7f6ef);
     box-shadow: 0 8px 18px rgba(0, 0, 0, 0.06);
   }
 
   .auth-strip.connected {
-    background: #d9fdd3;
+    background: var(--auth-bg, #d9fdd3);
   }
 
   .link-icon {
@@ -199,7 +199,7 @@
 
   .auth-copy span {
     margin-top: 2px;
-    color: #4d5e58;
+    color: var(--muted, #4d5e58);
     font-size: 0.78rem;
     line-height: 1.3;
   }
@@ -252,7 +252,7 @@
     margin-top: 6px;
     padding: 10px;
     border-radius: 16px;
-    background: rgba(255, 255, 255, 0.72);
+    background: var(--auth-card-bg, rgba(255, 255, 255, 0.72));
   }
 
   .account-details div {
@@ -262,7 +262,7 @@
   }
 
   .account-details span {
-    color: #667781;
+    color: var(--muted, #667781);
     font-size: 0.7rem;
     font-weight: 900;
     text-transform: uppercase;
@@ -271,7 +271,7 @@
 
   .account-details strong {
     overflow: hidden;
-    color: #0b211a;
+    color: var(--ink, #0b211a);
     font-size: 0.8rem;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -287,8 +287,8 @@
   }
 
   .secondary-button {
-    color: #075e54;
-    background: white;
+    color: var(--wa-green-dark, #075e54);
+    background: var(--auth-card-bg, white);
   }
 
   .danger-button {
@@ -307,13 +307,13 @@
     width: 100%;
     min-width: 0;
     padding: 0 12px;
-    color: #0b211a;
-    background: rgba(255, 255, 255, 0.86);
+    color: var(--auth-input-text, #0b211a);
+    background: var(--auth-input-bg, rgba(255, 255, 255, 0.86));
     outline: none;
   }
 
   input::placeholder {
-    color: #86958f;
+    color: var(--muted, #86958f);
   }
 
   .qr-wrap {
@@ -324,8 +324,8 @@
     margin-top: 6px;
     padding: 12px;
     border-radius: 16px;
-    color: #667781;
-    background: white;
+    color: var(--muted, #667781);
+    background: var(--auth-card-bg, white);
   }
 
   .qr-wrap :global(svg) {
@@ -344,6 +344,6 @@
     font-weight: 950;
     letter-spacing: 0.12em;
     text-align: center;
-    background: white;
+    background: var(--auth-card-bg, white);
   }
 </style>

@@ -5,6 +5,7 @@
   import ChatList from '$lib/components/ChatList.svelte';
   import ChatWindow from '$lib/components/ChatWindow.svelte';
   import StatusPanel from '$lib/components/StatusPanel.svelte';
+  import SettingsPanel from '$lib/components/SettingsPanel.svelte';
   import { connectBridge } from '$lib/api/whatsmo';
   import {
     appState,
@@ -28,7 +29,7 @@
   let bridgeCleanup: UnlistenFn | undefined;
   let attachNotice = false;
   let authModalOpen = false;
-  let activeScreen: 'chats' | 'chat' | 'updates' = 'chats';
+  let activeScreen: 'chats' | 'chat' | 'updates' | 'settings' = 'chats';
 
   $: linkLabel =
     $appState.auth.mode === 'connected'
@@ -95,7 +96,7 @@
   />
 </svelte:head>
 
-<main class="app-stage">
+<main class="app-stage" data-theme={$appState.theme}>
   <section class="device" aria-label="Whatsmo mobile app">
     {#if activeScreen === 'chat' && $selectedChat}
       <ChatWindow
@@ -108,6 +109,7 @@
       />
     {:else}
       <div class="home-screen">
+        {#if activeScreen !== 'settings'}
         <header class="app-header">
           <h1>Whatsmo</h1>
           <button
@@ -120,9 +122,10 @@
             {linkLabel}
           </button>
         </header>
+        {/if}
 
         <div class="screen-content">
-          {#if $appState.historySync}
+          {#if $appState.historySync && activeScreen !== 'settings'}
             <section class:active={$appState.historySync.active} class="history-sync-banner" aria-live="polite">
               <strong>{$appState.historySync.active ? 'Syncing history' : 'History sync'}</strong>
               <span>{$appState.historySync.message}</span>
@@ -131,6 +134,8 @@
 
           {#if activeScreen === 'chats'}
             <ChatList chats={$appState.chats} selectedChatId={$appState.selectedChatId} onSelect={openChat} />
+          {:else if activeScreen === 'settings'}
+            <SettingsPanel />
           {:else}
             <StatusPanel auth={$appState.auth} contacts={$appState.contacts} />
           {/if}
@@ -138,10 +143,13 @@
 
         <nav class="bottom-nav" aria-label="Primary navigation">
           <button class:active={activeScreen === 'chats'} on:click={() => (activeScreen = 'chats')}>
-            <span>●</span> Chats
+            <span class="material-symbols-rounded">chat</span> Chats
           </button>
           <button class:active={activeScreen === 'updates'} on:click={() => (activeScreen = 'updates')}>
-            <span>◎</span> Updates
+            <span class="material-symbols-rounded">data_usage</span> Updates
+          </button>
+          <button class:active={activeScreen === 'settings'} on:click={() => (activeScreen = 'settings')}>
+            <span class="material-symbols-rounded">settings</span> Settings
           </button>
         </nav>
       </div>
@@ -184,15 +192,79 @@
     --safe-right: env(safe-area-inset-right, 0px);
     --safe-bottom: env(safe-area-inset-bottom, 0px);
     --safe-left: env(safe-area-inset-left, 0px);
+
+    /* Material 3 Light Mode Colors (default) */
     --wa-green: #008069;
     --wa-green-dark: #075e54;
     --wa-mint: #d9fdd3;
     --ink: #101f1b;
     --muted: #667781;
     --paper: #fbfbf6;
-    color: #061f1a;
+    --border-color: #edf0eb;
+    --nav-bg: #fbfbf6;
+    --nav-active: #e7f6ef;
+    --message-in: white;
+    --message-out: #d9fdd3;
+    --app-bg: #efe7dd;
+    /* Auth Modal light defaults */
+    --modal-bg: var(--paper);
+    --auth-bg: #e7f6ef;
+    --auth-input-bg: rgba(255, 255, 255, 0.86);
+    --auth-input-text: #0b211a;
+    --auth-card-bg: rgba(255, 255, 255, 0.72);
+
+    color: var(--ink);
     font-family: var(--body-font);
-    background: #101815;
+    background: var(--app-bg);
+    /* Modal animation styles for Settings/Updates */
+    --modal-z: 100;
+    /* Mobile UI Tweaks */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Material 3 Dark Mode Colors */
+  .app-stage[data-theme="dark"] {
+    --wa-green: #25d366;
+    --wa-green-dark: #81cbb4;
+    --wa-mint: #005c4b;
+    --ink: #e9edef;
+    --muted: #8696a0;
+    --paper: #0b141a;
+    --border-color: #202c33;
+    --nav-bg: #111b21;
+    --nav-active: #202c33;
+    --message-in: #202c33;
+    --message-out: #005c4b;
+    --app-bg: #0b141a;
+    /* Auth Modal dark adjustments */
+    --modal-bg: #111b21;
+    --auth-bg: #202c33;
+    --auth-input-bg: rgba(255, 255, 255, 0.1);
+    --auth-input-text: #e9edef;
+    --auth-card-bg: rgba(255, 255, 255, 0.05);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .app-stage[data-theme="system"] {
+      --wa-green: #25d366;
+      --wa-green-dark: #81cbb4;
+      --wa-mint: #005c4b;
+      --ink: #e9edef;
+      --muted: #8696a0;
+      --paper: #0b141a;
+      --border-color: #202c33;
+      --nav-bg: #111b21;
+      --nav-active: #202c33;
+      --message-in: #202c33;
+      --message-out: #005c4b;
+      --app-bg: #0b141a;
+      /* Auth Modal dark adjustments */
+      --modal-bg: #111b21;
+      --auth-bg: #202c33;
+      --auth-input-bg: rgba(255, 255, 255, 0.1);
+      --auth-input-text: #e9edef;
+      --auth-card-bg: rgba(255, 255, 255, 0.05);
+    }
   }
 
   :global(body) {
@@ -238,8 +310,9 @@
   }
 
   .home-screen {
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
     min-height: 0;
     background: var(--paper);
   }
@@ -247,8 +320,11 @@
   .screen-content {
     display: flex;
     flex-direction: column;
+    flex: 1;
     min-height: 0;
     overflow: hidden;
+    position: relative;
+    z-index: 1;
   }
 
   .screen-content :global(.chat-list),
@@ -262,9 +338,10 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: calc(14px + var(--safe-top)) 18px 18px;
-    color: white;
-    background: var(--wa-green);
+    padding: calc(14px + var(--safe-top)) 18px 14px;
+    color: var(--ink);
+    background: var(--paper);
+    z-index: 5;
   }
 
   .app-header h1 {
@@ -273,45 +350,90 @@
 
   .app-header h1 {
     font-size: 1.6rem;
-    font-weight: 900;
-    letter-spacing: -0.03em;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--wa-green);
   }
 
   .link-button {
     min-height: 38px;
-    border: 1px solid rgba(255, 255, 255, 0.28);
+    border: 1px solid var(--border-color);
     border-radius: 999px;
     padding: 0 14px;
-    color: white;
+    color: var(--ink);
     font: inherit;
     font-size: 0.82rem;
-    font-weight: 950;
-    background: rgba(255, 255, 255, 0.14);
+    font-weight: 700;
+    background: transparent;
+    cursor: pointer;
   }
 
   .link-button.connected {
-    color: #073b2f;
-    background: #d9fdd3;
-    border-color: #d9fdd3;
+    color: var(--wa-green-dark, #073b2f);
+    background: var(--nav-active, #d9fdd3);
+    border-color: var(--nav-active, #d9fdd3);
   }
 
   .bottom-nav {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 4px;
-    padding: 8px 12px 12px;
-    border-top: 1px solid #edf0eb;
-    background: rgba(251, 251, 246, 0.96);
+    padding: 8px 12px max(12px, var(--safe-bottom));
+    border-top: 1px solid var(--border-color);
+    background: var(--nav-bg);
+    position: relative;
+    z-index: 10;
+  }
+
+  .bottom-nav button {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+    justify-content: center;
+    min-height: 56px;
+    width: 100%;
+    border: 0;
+    border-radius: 12px;
+    padding: 6px;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: transparent;
+    line-height: 1.1;
+    transition: color 0.15s ease, background-color 0.15s ease;
+    cursor: pointer;
+  }
+
+  .bottom-nav button.active {
+    color: var(--wa-green);
+  }
+
+  .bottom-nav span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 32px;
+    font-size: 1.6rem;
+    border-radius: 16px;
+    transition: background-color 0.2s ease;
+  }
+
+  .bottom-nav button.active span {
+    background-color: var(--nav-active);
   }
 
   .history-sync-banner {
     display: grid;
     gap: 3px;
-    margin: -2px 12px 10px;
-    padding: 10px 12px;
-    border-radius: 16px;
+    margin: 8px 12px 10px;
+    padding: 12px 14px;
+    border-radius: 12px;
     color: #075e54;
     background: #eef7f3;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
   }
 
   .history-sync-banner.active {
@@ -319,43 +441,13 @@
   }
 
   .history-sync-banner strong {
-    font-size: 0.82rem;
+    font-size: 0.85rem;
   }
 
   .history-sync-banner span {
     color: #4d5e58;
-    font-size: 0.76rem;
+    font-size: 0.8rem;
     line-height: 1.35;
-  }
-
-  .bottom-nav button {
-    display: grid;
-    gap: 2px;
-    justify-items: center;
-    align-content: center;
-    min-height: 54px;
-    width: 100%;
-    border: 0;
-    border-radius: 18px;
-    padding: 0 6px;
-    color: #667781;
-    font: inherit;
-    font-size: 0.75rem;
-    font-weight: 850;
-    background: transparent;
-    line-height: 1.1;
-  }
-
-  .bottom-nav button.active {
-    color: var(--wa-green);
-    background: #e7f6ef;
-  }
-
-  .bottom-nav span {
-    display: block;
-    height: 18px;
-    font-size: 1rem;
-    line-height: 18px;
   }
 
   .toast {
@@ -392,7 +484,7 @@
     overflow-y: auto;
     border-radius: 30px 30px 26px 26px;
     padding: 16px;
-    background: var(--paper);
+    background: var(--modal-bg, var(--paper));
     box-shadow: 0 28px 90px rgba(0, 0, 0, 0.38);
     animation: modal-rise 180ms ease-out both;
   }
@@ -427,11 +519,11 @@
     height: 40px;
     border: 0;
     border-radius: 999px;
-    color: #54645f;
+    color: var(--muted);
     font: inherit;
     font-size: 1.45rem;
     font-weight: 700;
-    background: #eef2ee;
+    background: var(--nav-active);
   }
 
   @keyframes modal-rise {
@@ -455,7 +547,7 @@
     }
 
     .bottom-nav {
-      padding-bottom: max(12px, calc(8px + var(--safe-bottom)));
+      padding-bottom: max(16px, calc(8px + var(--safe-bottom)));
     }
 
     .modal-backdrop {
