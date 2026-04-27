@@ -147,6 +147,15 @@ export interface OutgoingMessagePayload {
   timestampMs: number;
 }
 
+export interface OutgoingMediaPayload {
+  id: string;
+  chatId: string;
+  kind: MediaKind;
+  name: string;
+  caption?: string;
+  timestampMs: number;
+}
+
 export interface StatusPostPayload {
   id: string;
   text: string;
@@ -171,6 +180,24 @@ export interface ContactProfilePayload {
   avatarUrl?: string;
   isBusiness: boolean;
   updatedAtMs: number;
+}
+
+export interface ContactUpdatedPayload {
+  jid: string;
+  timestampMs: number;
+}
+
+export interface ContactNumberChangedPayload {
+  oldJid: string;
+  newJid: string;
+  oldLid?: string;
+  newLid?: string;
+  timestampMs: number;
+}
+
+export interface ContactSyncRequestedPayload {
+  afterMs?: number;
+  timestampMs: number;
 }
 
 export interface TypingPayload {

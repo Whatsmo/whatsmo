@@ -8,11 +8,15 @@ import type {
   ConnectionPayload,
   ContactProfile,
   ContactLookupPayload,
+  ContactNumberChangedPayload,
   ContactProfilePayload,
+  ContactSyncRequestedPayload,
+  ContactUpdatedPayload,
   GroupMetadataPayload,
   HistorySyncPayload,
   HistorySyncProgressPayload,
   IncomingMessagePayload,
+  MediaKind,
   ReceiptPayload,
   SessionStatusPayload,
   TypingPayload
@@ -24,6 +28,7 @@ import {
   isTauriRuntime,
   notifyNewMessage,
   resumeSavedSession,
+  sendMediaMessage,
   sendTextMessage,
   syncContacts as syncContactsApi,
   syncContactProfiles as syncContactProfilesApi,
@@ -33,6 +38,7 @@ import {
 const now = Date.now();
 const STORAGE_KEY = 'whatsmo.chat-state.v1';
 const MAX_PERSISTED_MESSAGES_PER_CHAT = 120;
+const MAX_ATTACHMENT_BYTES = 64 * 1024 * 1024;
 const queuedRetryKeys = new Set<string>();
 let queuedRetryTimer: number | undefined;
 let groupMetadataTimer: number | undefined;
@@ -372,6 +378,43 @@ export async function syncKnownContactProfiles(contactIds?: string[]): Promise<v
   }
 }
 
+export function handleContactUpdated(payload: ContactUpdatedPayload): void {
+  void syncKnownContactProfiles([payload.jid]);
+}
+
+export function handleContactSyncRequested(_payload: ContactSyncRequestedPayload): void {
+  void syncKnownContactProfiles();
+}
+
+export function handleContactNumberChanged(payload: ContactNumberChangedPayload): void {
+  const oldIds = [payload.oldJid, payload.oldLid].filter(Boolean) as string[];
+  const newId = payload.newJid;
+
+  appState.update((state) => {
+    const replacement = migrateContactId(state.contacts, oldIds, newId, payload.newLid);
+    return {
+      ...state,
+      contacts: replacement.contacts,
+      selectedChatId: oldIds.includes(state.selectedChatId) ? newId : state.selectedChatId,
+      chats: sortChats(
+        state.chats.map((chat) =>
+          oldIds.includes(chat.id)
+            ? {
+                ...chat,
+                id: newId,
+                title: displayNameFromJid(newId),
+                avatarGradient: gradientFromId(newId)
+              }
+            : chat
+        )
+      ),
+      messages: migrateMessagesByContactId(state.messages, oldIds, newId)
+    };
+  });
+
+  void syncKnownContactProfiles([newId, payload.newLid].filter(Boolean) as string[]);
+}
+
 export async function sendMessage(chatId: string, text: string): Promise<void> {
   const trimmed = text.trim();
   if (!trimmed) {
@@ -396,6 +439,56 @@ export async function sendMessage(chatId: string, text: string): Promise<void> {
   } catch (error) {
     markMessageStatus(chatId, optimistic.id, 'failed');
     console.error('Failed to send message', error);
+  }
+}
+
+export async function sendAttachment(chatId: string, file: File, caption = ''): Promise<void> {
+  if (file.size === 0) {
+    throw new Error('Attachment file is empty.');
+  }
+  if (file.size > MAX_ATTACHMENT_BYTES) {
+    throw new Error('Attachment is too large. Maximum supported size is 64 MB.');
+  }
+
+  const kind = mediaKindFromFile(file);
+  if (!kind) {
+    throw new Error('Unsupported attachment type. Use an image, video, or document file.');
+  }
+
+  const trimmedCaption = caption.trim();
+  const name = file.name || `${kind}-attachment`;
+  const optimistic: ChatMessage = {
+    id: crypto.randomUUID(),
+    chatId,
+    senderId: 'me',
+    text: trimmedCaption || undefined,
+    timestamp: Date.now(),
+    fromMe: true,
+    status: 'queued',
+    media: {
+      id: crypto.randomUUID(),
+      kind,
+      name
+    }
+  };
+
+  appendMessage(optimistic);
+
+  try {
+    const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
+    const sent = await sendMediaMessage(
+      chatId,
+      kind,
+      bytes,
+      file.type || fallbackMimeType(kind),
+      name,
+      trimmedCaption || undefined
+    );
+    markMessageStatus(chatId, optimistic.id, 'sent', sent.id);
+  } catch (error) {
+    markMessageStatus(chatId, optimistic.id, 'failed');
+    console.error('Failed to send attachment', error);
+    throw error;
   }
 }
 
@@ -807,6 +900,18 @@ function queueKey(chatId: string, messageId: string): string {
   return `${chatId}:${messageId}`;
 }
 
+function mediaKindFromFile(file: File): MediaKind | null {
+  if (file.type.startsWith('image/')) return 'image';
+  if (file.type.startsWith('video/')) return 'video';
+  return 'document';
+}
+
+function fallbackMimeType(kind: MediaKind): string {
+  if (kind === 'image') return 'image/jpeg';
+  if (kind === 'video') return 'video/mp4';
+  return 'application/octet-stream';
+}
+
 function createInitialState(): AppModel {
   const persisted = loadPersistedState();
   if (persisted) {
@@ -975,6 +1080,47 @@ function upsertContacts(existing: ContactProfile[], incoming: ContactProfile[]):
   }
 
   return Array.from(byId.values()).sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function migrateContactId(
+  existing: ContactProfile[],
+  oldIds: string[],
+  newId: string,
+  newLid?: string
+): { contacts: ContactProfile[] } {
+  const oldContact = existing.find((contact) => oldIds.includes(contact.id));
+  const filtered = existing.filter((contact) => !oldIds.includes(contact.id) && contact.id !== newId);
+  const migrated: ContactProfile = {
+    ...(oldContact ?? contactFromJid(newId)),
+    id: newId,
+    name: displayNameFromJid(newId),
+    phone: newId.includes('@s.whatsapp.net') ? `+${shortJid(newId)}` : newId,
+    lid: newLid ?? oldContact?.lid,
+    avatarGradient: gradientFromId(newId)
+  };
+
+  return { contacts: upsertContacts(filtered, [migrated]) };
+}
+
+function migrateMessagesByContactId(
+  messages: Record<string, ChatMessage[]>,
+  oldIds: string[],
+  newId: string
+): Record<string, ChatMessage[]> {
+  const migrated: Record<string, ChatMessage[]> = {};
+  for (const [chatId, chatMessages] of Object.entries(messages)) {
+    const nextChatId = oldIds.includes(chatId) ? newId : chatId;
+    migrated[nextChatId] = [
+      ...(migrated[nextChatId] ?? []),
+      ...chatMessages.map((message) => ({
+        ...message,
+        chatId: oldIds.includes(message.chatId) ? newId : message.chatId,
+        senderId: oldIds.includes(message.senderId) ? newId : message.senderId
+      }))
+    ];
+  }
+
+  return migrated;
 }
 
 function displayNameFromJid(jid: string): string {

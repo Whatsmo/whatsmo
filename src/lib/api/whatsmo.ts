@@ -10,11 +10,16 @@ import type {
   AccountDevicePayload,
   ConnectionPayload,
   ContactLookupPayload,
+  ContactNumberChangedPayload,
   ContactProfilePayload,
+  ContactSyncRequestedPayload,
+  ContactUpdatedPayload,
   GroupMetadataPayload,
   HistorySyncPayload,
   HistorySyncProgressPayload,
   IncomingMessagePayload,
+  MediaKind,
+  OutgoingMediaPayload,
   OutgoingMessagePayload,
   ReceiptPayload,
   SessionStatusPayload,
@@ -122,6 +127,37 @@ export async function sendTextMessage(chatId: string, text: string): Promise<Out
   }
 
   return invoke<OutgoingMessagePayload>('send_text_message', { chatId, text });
+}
+
+export async function sendMediaMessage(
+  chatId: string,
+  kind: MediaKind,
+  data: number[],
+  mimeType: string,
+  fileName: string,
+  caption?: string,
+  durationSeconds?: number
+): Promise<OutgoingMediaPayload> {
+  if (!isTauriRuntime()) {
+    return {
+      id: crypto.randomUUID(),
+      chatId,
+      kind,
+      name: fileName,
+      caption,
+      timestampMs: Date.now()
+    };
+  }
+
+  return invoke<OutgoingMediaPayload>('send_media_message', {
+    chatId,
+    kind,
+    data,
+    mimeType,
+    fileName,
+    caption,
+    durationSeconds
+  });
 }
 
 export async function sendTextStatus(
@@ -299,6 +335,9 @@ export interface BridgeHandlers {
   onMessage: (payload: IncomingMessagePayload) => void;
   onHistorySync: (payload: HistorySyncPayload) => void;
   onHistoryProgress: (payload: HistorySyncProgressPayload) => void;
+  onContactUpdated: (payload: ContactUpdatedPayload) => void;
+  onContactNumberChanged: (payload: ContactNumberChangedPayload) => void;
+  onContactSyncRequested: (payload: ContactSyncRequestedPayload) => void;
   onTyping: (payload: TypingPayload) => void;
   onReceipt: (payload: ReceiptPayload) => void;
 }
@@ -314,6 +353,9 @@ export async function connectBridge(handlers: BridgeHandlers): Promise<UnlistenF
     listen<IncomingMessagePayload>('whatsmo://message', (event) => handlers.onMessage(event.payload)),
     listen<HistorySyncPayload>('whatsmo://history-sync', (event) => handlers.onHistorySync(event.payload)),
     listen<HistorySyncProgressPayload>('whatsmo://history-progress', (event) => handlers.onHistoryProgress(event.payload)),
+    listen<ContactUpdatedPayload>('whatsmo://contact-updated', (event) => handlers.onContactUpdated(event.payload)),
+    listen<ContactNumberChangedPayload>('whatsmo://contact-number-changed', (event) => handlers.onContactNumberChanged(event.payload)),
+    listen<ContactSyncRequestedPayload>('whatsmo://contact-sync-requested', (event) => handlers.onContactSyncRequested(event.payload)),
     listen<TypingPayload>('whatsmo://typing', (event) => handlers.onTyping(event.payload)),
     listen<ReceiptPayload>('whatsmo://receipt', (event) => handlers.onReceipt(event.payload))
   ]);

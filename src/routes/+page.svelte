@@ -9,6 +9,9 @@
   import { connectBridge } from '$lib/api/whatsmo';
   import {
     appState,
+    handleContactNumberChanged,
+    handleContactSyncRequested,
+    handleContactUpdated,
     ingestHistorySync,
     ingestIncomingMessage,
     refreshAccountDevice,
@@ -18,6 +21,7 @@
     selectedChat,
     selectedMessages,
     selectChat,
+    sendAttachment,
     sendMessage,
     setAuth,
     setConnection,
@@ -53,6 +57,9 @@
       onMessage: ingestIncomingMessage,
       onHistorySync: ingestHistorySync,
       onHistoryProgress: setHistoryProgress,
+      onContactUpdated: handleContactUpdated,
+      onContactNumberChanged: handleContactNumberChanged,
+      onContactSyncRequested: handleContactSyncRequested,
       onTyping: setTyping,
       onReceipt: setReceipt
     }).then((cleanup) => {
@@ -65,11 +72,16 @@
     };
   });
 
-  function showAttachNotice(): void {
-    attachNotice = true;
-    window.setTimeout(() => {
-      attachNotice = false;
-    }, 2600);
+  async function handleAttachment(chatId: string, file: File): Promise<void> {
+    try {
+      await sendAttachment(chatId, file);
+    } catch (error) {
+      attachNotice = true;
+      window.setTimeout(() => {
+        attachNotice = false;
+      }, 3200);
+      console.error('Attachment send failed', error);
+    }
   }
 
   function openChat(chatId: string): void {
@@ -105,7 +117,7 @@
         onBack={() => (activeScreen = 'chats')}
         onSend={sendMessage}
         onRetry={retryMessage}
-        onAttach={showAttachNotice}
+        onAttach={handleAttachment}
       />
     {:else}
       <div class="home-screen">
@@ -157,7 +169,7 @@
   </section>
 
   {#if attachNotice}
-    <div class="toast" role="status">Media picker is queued for the next backend slice.</div>
+    <div class="toast" role="status">Could not send attachment. Check file type, size, and connection.</div>
   {/if}
 
   {#if authModalOpen}
