@@ -149,6 +149,19 @@ pub struct IncomingMessagePayload {
     timestamp_ms: i64,
     is_group: bool,
     from_me: bool,
+    event_kind: MessageEventKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    target_message_id: Option<String>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MessageEventKind {
+    Message,
+    Edit,
+    Revoke,
+    AdminRevoke,
+    Other,
 }
 
 #[derive(Clone, Serialize)]
@@ -898,6 +911,12 @@ async fn start_session(
                             timestamp_ms: info.timestamp.timestamp_millis(),
                             is_group: info.source.is_group,
                             from_me: info.source.is_from_me,
+                            event_kind: message_event_kind(&info.edit),
+                            target_message_id: info
+                                .meta_info
+                                .target_id
+                                .as_ref()
+                                .map(ToString::to_string),
                         };
                         emit_event(&app, "whatsmo://message", payload);
                     }
@@ -1183,7 +1202,21 @@ fn history_message_payload(
             .unwrap_or_else(|| Utc::now().timestamp_millis()),
         is_group,
         from_me,
+        event_kind: MessageEventKind::Message,
+        target_message_id: None,
     })
+}
+
+fn message_event_kind(edit: &wacore::types::message::EditAttribute) -> MessageEventKind {
+    use wacore::types::message::EditAttribute;
+
+    match edit {
+        EditAttribute::MessageEdit | EditAttribute::AdminEdit => MessageEventKind::Edit,
+        EditAttribute::SenderRevoke => MessageEventKind::Revoke,
+        EditAttribute::AdminRevoke => MessageEventKind::AdminRevoke,
+        EditAttribute::Empty => MessageEventKind::Message,
+        EditAttribute::PinInChat | EditAttribute::Unknown(_) => MessageEventKind::Other,
+    }
 }
 
 fn seconds_to_millis(seconds: u64) -> i64 {
