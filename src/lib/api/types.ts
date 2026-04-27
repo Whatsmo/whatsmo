@@ -42,6 +42,10 @@ export interface ContactProfile {
   phone: string;
   about: string;
   avatarGradient: string;
+  avatarUrl?: string;
+  lid?: string;
+  pictureId?: string;
+  profileUpdatedAt?: number;
   isBusiness?: boolean;
   isOnline?: boolean;
 }
@@ -75,9 +79,34 @@ export interface ChatSummary {
   muted: boolean;
   pinned: boolean;
   avatarGradient: string;
+  avatarUrl?: string;
   lastMessageAt: number;
   participantCount?: number;
+  groupDescription?: string;
+  groupAdminCount?: number;
+  groupIsLocked?: boolean;
+  groupIsAnnouncement?: boolean;
   typing?: string;
+}
+
+export interface GroupParticipantProfile {
+  id: string;
+  phoneNumber?: string;
+  isAdmin: boolean;
+}
+
+export interface GroupMetadataPayload {
+  id: string;
+  subject: string;
+  avatarUrl?: string;
+  description?: string;
+  participantCount: number;
+  adminCount: number;
+  isLocked: boolean;
+  isAnnouncement: boolean;
+  creator?: string;
+  createdAtMs?: number;
+  participants: GroupParticipantProfile[];
 }
 
 export interface IncomingMessagePayload {
@@ -133,6 +162,17 @@ export interface ContactLookupPayload {
   isRegistered: boolean;
 }
 
+export interface ContactProfilePayload {
+  id: string;
+  phone: string;
+  lid?: string;
+  about?: string;
+  pictureId?: string;
+  avatarUrl?: string;
+  isBusiness: boolean;
+  updatedAtMs: number;
+}
+
 export interface TypingPayload {
   chatId: string;
   name: string;
@@ -145,6 +185,8 @@ export interface ReceiptPayload {
   status: MessageStatus;
 }
 
+export type ThemeMode = 'light' | 'dark' | 'system';
+
 export interface AppModel {
   auth: AuthPayload;
   account: AccountDevicePayload | null;
@@ -152,6 +194,8 @@ export interface AppModel {
   chats: ChatSummary[];
   messages: Record<string, ChatMessage[]>;
   contacts: ContactProfile[];
+  groups: Record<string, GroupMetadataPayload>;
   selectedChatId: string;
   notificationEnabled: boolean;
+  theme: ThemeMode;
 }

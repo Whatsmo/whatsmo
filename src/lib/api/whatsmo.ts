@@ -10,6 +10,8 @@ import type {
   AccountDevicePayload,
   ConnectionPayload,
   ContactLookupPayload,
+  ContactProfilePayload,
+  GroupMetadataPayload,
   HistorySyncPayload,
   HistorySyncProgressPayload,
   IncomingMessagePayload,
@@ -236,6 +238,37 @@ export async function syncContacts(phones: string[]): Promise<ContactLookupPaylo
   }
 
   return invoke<ContactLookupPayload[]>('sync_contacts', { phones });
+}
+
+export async function syncContactProfiles(jids: string[]): Promise<ContactProfilePayload[]> {
+  if (!isTauriRuntime()) {
+    return jids.map((jid) => ({
+      id: jid,
+      phone: jid.split('@')[0] ?? jid,
+      about: 'Browser preview profile',
+      isBusiness: false,
+      updatedAtMs: Date.now()
+    }));
+  }
+
+  return invoke<ContactProfilePayload[]>('sync_contact_profiles', { jids });
+}
+
+export async function syncGroupMetadata(groupIds: string[]): Promise<GroupMetadataPayload[]> {
+  if (!isTauriRuntime()) {
+    return groupIds.map((groupId) => ({
+      id: groupId,
+      subject: groupId.includes('@g.us') ? 'Browser preview group' : groupId,
+      description: 'Preview group metadata',
+      participantCount: 3,
+      adminCount: 1,
+      isLocked: false,
+      isAnnouncement: false,
+      participants: []
+    }));
+  }
+
+  return invoke<GroupMetadataPayload[]>('sync_group_metadata', { groupIds });
 }
 
 export async function enableNotifications(): Promise<boolean> {

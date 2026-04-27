@@ -4,7 +4,7 @@ use whatsapp::{
     WhatsmoState, disconnect_session, get_account_device, get_session_status, logout_session,
     request_pair_code, resume_saved_session, revoke_status, send_image_status, send_raw_status,
     send_status_reaction, send_text_message, send_text_status, send_video_status, start_qr_auth,
-    sync_contacts,
+    sync_contact_profiles, sync_contacts, sync_group_metadata,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -23,7 +23,9 @@ pub fn run() {
             send_video_status,
             revoke_status,
             send_status_reaction,
+            sync_contact_profiles,
             sync_contacts,
+            sync_group_metadata,
             get_account_device,
             get_session_status,
             logout_session,

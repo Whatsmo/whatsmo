@@ -233,6 +233,52 @@ pub struct ContactLookupPayload {
     is_registered: bool,
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContactProfilePayload {
+    id: String,
+    phone: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    lid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    about: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    picture_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    avatar_url: Option<String>,
+    is_business: bool,
+    updated_at_ms: i64,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupParticipantPayload {
+    id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    phone_number: Option<String>,
+    is_admin: bool,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupMetadataPayload {
+    id: String,
+    subject: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    avatar_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
+    participant_count: usize,
+    admin_count: usize,
+    is_locked: bool,
+    is_announcement: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    creator: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    created_at_ms: Option<i64>,
+    participants: Vec<GroupParticipantPayload>,
+}
+
 #[tauri::command]
 pub async fn start_qr_auth(
     app: AppHandle,
@@ -587,6 +633,81 @@ pub async fn sync_contacts(
             is_registered: contact.is_registered,
         })
         .collect())
+}
+
+#[tauri::command]
+pub async fn sync_contact_profiles(
+    state: State<'_, WhatsmoState>,
+    jids: Vec<String>,
+) -> CommandResult<Vec<ContactProfilePayload>> {
+    let client = connected_client(&state).await?;
+    let parsed_jids = jids
+        .iter()
+        .map(|jid| parse_profile_jid(jid))
+        .collect::<CommandResult<Vec<_>>>()?;
+    contact_profiles_for_jids(&client, parsed_jids).await
+}
+
+#[tauri::command]
+pub async fn sync_group_metadata(
+    state: State<'_, WhatsmoState>,
+    group_ids: Vec<String>,
+) -> CommandResult<Vec<GroupMetadataPayload>> {
+    let client = connected_client(&state).await?;
+    let mut groups = Vec::new();
+
+    for group_id in group_ids {
+        let jid = group_id
+            .parse::<Jid>()
+            .map_err(|error| format!("Invalid group JID {group_id}: {error}"))?;
+        if !jid.is_group() {
+            return Err(format!("{group_id} is not a group JID."));
+        }
+
+        let metadata =
+            client.groups().get_metadata(&jid).await.map_err(|error| {
+                format!("Failed to sync group metadata for {group_id}: {error}")
+            })?;
+        let picture = client
+            .contacts()
+            .get_profile_picture(&metadata.id, true)
+            .await
+            .map_err(|error| format!("Failed to sync group picture for {group_id}: {error}"))?;
+
+        let participants = metadata
+            .participants
+            .iter()
+            .map(|participant| GroupParticipantPayload {
+                id: participant.jid.to_string(),
+                phone_number: participant.phone_number.as_ref().map(ToString::to_string),
+                is_admin: participant.is_admin,
+            })
+            .collect::<Vec<_>>();
+        let participant_count = metadata
+            .size
+            .map(|size| size as usize)
+            .unwrap_or(participants.len());
+        let admin_count = participants
+            .iter()
+            .filter(|participant| participant.is_admin)
+            .count();
+
+        groups.push(GroupMetadataPayload {
+            id: metadata.id.to_string(),
+            subject: metadata.subject,
+            avatar_url: picture.as_ref().map(|value| value.url.clone()),
+            description: metadata.description,
+            participant_count,
+            admin_count,
+            is_locked: metadata.is_locked,
+            is_announcement: metadata.is_announcement,
+            creator: metadata.creator.map(|jid| jid.to_string()),
+            created_at_ms: metadata.creation_time.map(seconds_to_millis),
+            participants,
+        });
+    }
+
+    Ok(groups)
 }
 
 #[tauri::command]
@@ -1231,6 +1352,71 @@ fn chat_title_from_jid(jid: &str) -> String {
         format!("+{user}")
     } else {
         user.to_string()
+    }
+}
+
+async fn contact_profiles_for_jids(
+    client: &Client,
+    jids: Vec<Jid>,
+) -> CommandResult<Vec<ContactProfilePayload>> {
+    if jids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let user_jids = jids
+        .iter()
+        .filter(|jid| !jid.is_group() && !jid.is_newsletter() && !jid.is_status_broadcast())
+        .cloned()
+        .collect::<Vec<_>>();
+    let user_info = client
+        .contacts()
+        .get_user_info(&user_jids)
+        .await
+        .map_err(|error| format!("Failed to sync contact profile info: {error}"))?;
+    let mut profiles = Vec::with_capacity(jids.len());
+
+    for jid in jids {
+        let info = user_info.get(&jid);
+        let picture = client
+            .contacts()
+            .get_profile_picture(&jid, true)
+            .await
+            .map_err(|error| format!("Failed to sync profile picture for {jid}: {error}"))?;
+
+        profiles.push(ContactProfilePayload {
+            id: jid.to_string(),
+            phone: jid.user.clone(),
+            lid: info
+                .and_then(|value| value.lid.as_ref())
+                .map(ToString::to_string),
+            about: info.and_then(|value| value.status.clone()),
+            picture_id: info
+                .and_then(|value| value.picture_id.clone())
+                .or_else(|| picture.as_ref().map(|value| value.id.clone())),
+            avatar_url: picture.as_ref().map(|value| value.url.clone()),
+            is_business: info.is_some_and(|value| value.is_business),
+            updated_at_ms: Utc::now().timestamp_millis(),
+        });
+    }
+
+    Ok(profiles)
+}
+
+fn parse_profile_jid(input: &str) -> CommandResult<Jid> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Err("Profile JID cannot be empty.".to_string());
+    }
+
+    if trimmed.contains('@') {
+        trimmed
+            .parse::<Jid>()
+            .map_err(|error| format!("Invalid profile JID {trimmed}: {error}"))
+    } else {
+        let digits = normalize_phone(trimmed)?;
+        format!("{digits}@s.whatsapp.net")
+            .parse::<Jid>()
+            .map_err(|error| format!("Invalid profile phone {trimmed}: {error}"))
     }
 }
 

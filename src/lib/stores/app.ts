@@ -8,6 +8,8 @@ import type {
   ConnectionPayload,
   ContactProfile,
   ContactLookupPayload,
+  ContactProfilePayload,
+  GroupMetadataPayload,
   HistorySyncPayload,
   HistorySyncProgressPayload,
   IncomingMessagePayload,
@@ -23,7 +25,9 @@ import {
   notifyNewMessage,
   resumeSavedSession,
   sendTextMessage,
-  syncContacts as syncContactsApi
+  syncContacts as syncContactsApi,
+  syncContactProfiles as syncContactProfilesApi,
+  syncGroupMetadata as syncGroupMetadataApi
 } from '$lib/api/whatsmo';
 
 const now = Date.now();
@@ -31,6 +35,8 @@ const STORAGE_KEY = 'whatsmo.chat-state.v1';
 const MAX_PERSISTED_MESSAGES_PER_CHAT = 120;
 const queuedRetryKeys = new Set<string>();
 let queuedRetryTimer: number | undefined;
+let groupMetadataTimer: number | undefined;
+let contactProfileTimer: number | undefined;
 
 const contacts: ContactProfile[] = [
   {
@@ -168,7 +174,9 @@ interface PersistedAppData {
   chats: ChatSummary[];
   messages: Record<string, ChatMessage[]>;
   contacts: ContactProfile[];
+  groups: Record<string, GroupMetadataPayload>;
   selectedChatId: string;
+  theme?: import('$lib/api/types').ThemeMode;
 }
 
 export const appState = writable<AppModel>(createInitialState());
@@ -179,7 +187,9 @@ if (typeof window !== 'undefined') {
       chats: state.chats,
       messages: trimPersistedMessages(state.messages),
       contacts: state.contacts,
-      selectedChatId: state.selectedChatId
+      groups: state.groups,
+      selectedChatId: state.selectedChatId,
+      theme: state.theme
     };
 
     try {
@@ -222,6 +232,8 @@ export function setConnection(payload: ConnectionPayload): void {
 
   if (payload.connected) {
     scheduleQueuedMessageRetry();
+    scheduleGroupMetadataSync();
+    scheduleContactProfileSync();
   }
 }
 
@@ -252,6 +264,8 @@ export function setSessionStatus(payload: SessionStatusPayload): void {
 
   if (payload.connected) {
     scheduleQueuedMessageRetry();
+    scheduleGroupMetadataSync();
+    scheduleContactProfileSync();
   }
 }
 
@@ -286,6 +300,8 @@ export async function resumeSession(): Promise<void> {
     const status = await resumeSavedSession();
     setSessionStatus(status);
     await refreshAccountDevice();
+    await syncKnownGroupMetadata();
+    await syncKnownContactProfiles();
   } catch (error) {
     appState.update((state) => ({
       ...state,
@@ -324,6 +340,36 @@ export async function syncContactsByPhoneNumbers(rawPhones: string[]): Promise<C
   }
 
   return profiles;
+}
+
+export async function syncKnownGroupMetadata(groupIds?: string[]): Promise<void> {
+  const state = get(appState);
+  const ids = groupIds ?? state.chats.filter((chat) => chat.kind === 'group').map((chat) => chat.id);
+  const uniqueGroupIds = Array.from(new Set(ids.filter((id) => id.includes('@g.us'))));
+  if (uniqueGroupIds.length === 0) return;
+
+  try {
+    const groups = await syncGroupMetadataApi(uniqueGroupIds);
+    applyGroupMetadata(groups);
+  } catch (error) {
+    console.warn('Could not sync group metadata', error);
+  }
+}
+
+export async function syncKnownContactProfiles(contactIds?: string[]): Promise<void> {
+  const state = get(appState);
+  const ids = contactIds ?? collectKnownContactJids(state);
+  const uniqueContactIds = Array.from(
+    new Set(ids.filter((id) => id.includes('@s.whatsapp.net') || id.includes('@lid')))
+  );
+  if (uniqueContactIds.length === 0) return;
+
+  try {
+    const profiles = await syncContactProfilesApi(uniqueContactIds);
+    applyContactProfiles(profiles);
+  } catch (error) {
+    console.warn('Could not sync contact profiles', error);
+  }
 }
 
 export async function sendMessage(chatId: string, text: string): Promise<void> {
@@ -419,6 +465,7 @@ export function ingestIncomingMessage(payload: IncomingMessagePayload): void {
   };
 
   appendMessage(message);
+  scheduleContactProfileSync([payload.senderId, payload.isGroup ? '' : payload.chatId]);
 
   const state = get(appState);
   const chat = state.chats.find((item) => item.id === payload.chatId);
@@ -505,6 +552,73 @@ export function ingestHistorySync(payload: HistorySyncPayload): void {
         ...state.messages,
         [payload.chatId]: mergedMessages
       }
+    };
+  });
+
+  if (payload.isGroup) {
+    scheduleGroupMetadataSync([payload.chatId]);
+  }
+  scheduleContactProfileSync(collectContactJidsFromHistory(payload));
+}
+
+export function applyContactProfiles(profiles: ContactProfilePayload[]): void {
+  if (profiles.length === 0) return;
+
+  const incomingProfiles = profiles.map(profileFromPayload);
+  appState.update((state) => {
+    const contacts = upsertContacts(state.contacts, incomingProfiles);
+    const profileMap = new Map(incomingProfiles.map((profile) => [profile.id, profile]));
+
+    return {
+      ...state,
+      contacts,
+      chats: sortChats(
+        state.chats.map((chat) => {
+          const profile = profileMap.get(chat.id);
+          if (!profile) return chat;
+
+          return {
+            ...chat,
+            title: profile.name || chat.title,
+            avatarUrl: profile.avatarUrl ?? chat.avatarUrl,
+            subtitle: chat.subtitle || profile.about
+          };
+        })
+      )
+    };
+  });
+}
+
+export function applyGroupMetadata(groups: GroupMetadataPayload[]): void {
+  if (groups.length === 0) return;
+
+  appState.update((state) => {
+    const groupMap = {
+      ...state.groups,
+      ...Object.fromEntries(groups.map((group) => [group.id, group]))
+    };
+
+    return {
+      ...state,
+      groups: groupMap,
+      chats: sortChats(
+        state.chats.map((chat) => {
+          const group = groupMap[chat.id];
+          if (!group) return chat;
+
+          return {
+            ...chat,
+            title: group.subject || chat.title,
+            avatarUrl: group.avatarUrl ?? chat.avatarUrl,
+            subtitle: group.isAnnouncement ? 'Announcement group' : chat.subtitle,
+            participantCount: group.participantCount,
+            groupDescription: group.description,
+            groupAdminCount: group.adminCount,
+            groupIsLocked: group.isLocked,
+            groupIsAnnouncement: group.isAnnouncement
+          };
+        })
+      )
     };
   });
 }
@@ -657,6 +771,28 @@ function scheduleQueuedMessageRetry(): void {
   }, 800);
 }
 
+function scheduleGroupMetadataSync(groupIds?: string[]): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.clearTimeout(groupMetadataTimer);
+  groupMetadataTimer = window.setTimeout(() => {
+    void syncKnownGroupMetadata(groupIds);
+  }, 1000);
+}
+
+function scheduleContactProfileSync(contactIds?: string[]): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.clearTimeout(contactProfileTimer);
+  contactProfileTimer = window.setTimeout(() => {
+    void syncKnownContactProfiles(contactIds);
+  }, 1200);
+}
+
 function isRetryableOutgoingMessage(message: ChatMessage): boolean {
   return (
     message.fromMe &&
@@ -684,8 +820,10 @@ function createInitialState(): AppModel {
       chats: persisted.chats,
       messages: persisted.messages,
       contacts: persisted.contacts,
+      groups: persisted.groups,
       selectedChatId: persisted.selectedChatId,
-      notificationEnabled: false
+      notificationEnabled: false,
+      theme: persisted.theme ?? 'system'
     };
   }
 
@@ -701,9 +839,15 @@ function createInitialState(): AppModel {
     chats: shouldSeedPreview ? chats : [],
     messages: shouldSeedPreview ? messages : {},
     contacts: shouldSeedPreview ? contacts : [],
+    groups: {},
     selectedChatId: shouldSeedPreview ? chats[0]?.id ?? '' : '',
-    notificationEnabled: false
+    notificationEnabled: false,
+    theme: 'system'
   };
+}
+
+export function setTheme(theme: import('$lib/api/types').ThemeMode): void {
+  appState.update((state) => ({ ...state, theme }));
 }
 
 function loadPersistedState(): PersistedAppData | null {
@@ -725,12 +869,15 @@ function loadPersistedState(): PersistedAppData | null {
     const chatsValue = parsed.chats;
     const messagesValue = parsed.messages;
     const contactsValue = parsed.contacts;
+    const groupsValue = parsed.groups;
     const selectedChatIdValue = parsed.selectedChatId;
+    const themeValue = parsed.theme;
 
     if (
       !Array.isArray(chatsValue) ||
       !isRecord(messagesValue) ||
       !Array.isArray(contactsValue) ||
+      (groupsValue !== undefined && !isRecord(groupsValue)) ||
       typeof selectedChatIdValue !== 'string'
     ) {
       return null;
@@ -747,7 +894,9 @@ function loadPersistedState(): PersistedAppData | null {
       chats: chatsValue as ChatSummary[],
       messages: messagesByChat,
       contacts: contactsValue as ContactProfile[],
-      selectedChatId: selectedChatIdValue
+      groups: (groupsValue as Record<string, GroupMetadataPayload> | undefined) ?? {},
+      selectedChatId: selectedChatIdValue,
+      theme: (themeValue as import('$lib/api/types').ThemeMode) ?? 'system'
     };
   } catch (error) {
     console.warn('Could not load Whatsmo chat state', error);
@@ -787,6 +936,36 @@ function profileFromLookup(contact: ContactLookupPayload): ContactProfile {
     avatarGradient: gradientFromId(contact.id),
     isBusiness: contact.isBusiness
   };
+}
+
+function profileFromPayload(contact: ContactProfilePayload): ContactProfile {
+  return {
+    id: contact.id,
+    name: displayNameFromJid(contact.id),
+    phone: `+${contact.phone}`,
+    about: contact.about ?? (contact.isBusiness ? 'Business account' : 'WhatsApp contact'),
+    avatarGradient: gradientFromId(contact.id),
+    avatarUrl: contact.avatarUrl,
+    lid: contact.lid,
+    pictureId: contact.pictureId,
+    profileUpdatedAt: contact.updatedAtMs,
+    isBusiness: contact.isBusiness
+  };
+}
+
+function collectKnownContactJids(state: AppModel): string[] {
+  return [
+    ...state.contacts.map((contact) => contact.id),
+    ...state.chats.filter((chat) => chat.kind === 'direct').map((chat) => chat.id),
+    ...Object.values(state.messages).flatMap((chatMessages) => chatMessages.map((message) => message.senderId))
+  ];
+}
+
+function collectContactJidsFromHistory(payload: HistorySyncPayload): string[] {
+  return [
+    ...(payload.isGroup ? [] : [payload.chatId]),
+    ...payload.messages.map((message) => message.senderId)
+  ];
 }
 
 function upsertContacts(existing: ContactProfile[], incoming: ContactProfile[]): ContactProfile[] {
