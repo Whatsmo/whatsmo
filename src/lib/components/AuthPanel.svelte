@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import QRCode from 'qrcode';
   import type { AuthPayload } from '$lib/api/types';
-  import { disconnectSession, requestPairCode, startQrAuth } from '$lib/api/whatsmo';
+  import { disconnectSession, logoutSession, requestPairCode, startQrAuth } from '$lib/api/whatsmo';
   import { requestNotifications, setAuth, setConnection } from '$lib/stores/app';
 
   export let auth: AuthPayload;
@@ -56,10 +56,29 @@
     }
   }
 
-  async function disconnect(): Promise<void> {
+  async function disconnectLocal(): Promise<void> {
     busy = true;
     try {
       setConnection(await disconnectSession());
+    } catch (error) {
+      setAuth({ mode: 'error', message: error instanceof Error ? error.message : String(error) });
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function unlinkDevice(): Promise<void> {
+    const confirmed = window.confirm(
+      'Unlink this Whatsmo companion from WhatsApp? You will need to pair again after this.'
+    );
+    if (!confirmed) return;
+
+    busy = true;
+    setAuth({ mode: 'connecting', message: 'Unlinking this companion from WhatsApp...' });
+    try {
+      setConnection(await logoutSession());
+    } catch (error) {
+      setAuth({ mode: 'error', message: error instanceof Error ? error.message : String(error) });
     } finally {
       busy = false;
     }
@@ -74,7 +93,10 @@
   </div>
 
   {#if auth.mode === 'connected'}
-    <button class="disconnect-button" disabled={busy} on:click={disconnect}>Disconnect</button>
+    <div class="session-actions">
+      <button class="secondary-button" disabled={busy} on:click={disconnectLocal}>Stop locally</button>
+      <button class="danger-button" disabled={busy} on:click={unlinkDevice}>Unlink</button>
+    </div>
   {:else}
     <div class="auth-controls">
       <button class="qr-button" disabled={busy} on:click={beginQr}>QR</button>
@@ -176,7 +198,6 @@
     margin-top: 4px;
   }
 
-  .disconnect-button,
   .qr-button,
   .phone-entry button {
     padding: 0 14px;
@@ -184,10 +205,27 @@
     background: var(--wa-green, #008069);
   }
 
-  .disconnect-button {
+  .session-actions {
     grid-column: 1 / -1;
-    width: fit-content;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
     margin-top: 5px;
+  }
+
+  .secondary-button,
+  .danger-button {
+    padding: 0 14px;
+  }
+
+  .secondary-button {
+    color: #075e54;
+    background: white;
+  }
+
+  .danger-button {
+    color: white;
+    background: #b3261e;
   }
 
   .phone-entry {

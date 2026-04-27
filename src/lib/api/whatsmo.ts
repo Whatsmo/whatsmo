@@ -57,6 +57,14 @@ export async function disconnectSession(): Promise<ConnectionPayload> {
   return invoke<ConnectionPayload>('disconnect_session');
 }
 
+export async function logoutSession(): Promise<ConnectionPayload> {
+  if (!isTauriRuntime()) {
+    return { connected: false, message: 'Preview session unlinked.' };
+  }
+
+  return invoke<ConnectionPayload>('logout_session');
+}
+
 export async function getSessionStatus(): Promise<SessionStatusPayload> {
   if (!isTauriRuntime()) {
     return {
