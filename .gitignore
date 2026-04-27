@@ -1,0 +1,11 @@
+.DS_Store
+.svelte-kit/
+.tauri/
+.local/
+dist/
+node_modules/
+src-tauri/target/
+src-tauri/.android/
+*.db
+*.db-shm
+*.db-wal
