@@ -1,9 +1,9 @@
 mod whatsapp;
 
 use whatsapp::{
-    WhatsmoState, disconnect_session, get_session_status, request_pair_code, resume_saved_session,
-    revoke_status, send_image_status, send_raw_status, send_status_reaction, send_text_message,
-    send_text_status, send_video_status, start_qr_auth, sync_contacts,
+    WhatsmoState, disconnect_session, get_session_status, logout_session, request_pair_code,
+    resume_saved_session, revoke_status, send_image_status, send_raw_status, send_status_reaction,
+    send_text_message, send_text_status, send_video_status, start_qr_auth, sync_contacts,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -24,6 +24,7 @@ pub fn run() {
             send_status_reaction,
             sync_contacts,
             get_session_status,
+            logout_session,
             disconnect_session
         ])
         .run(tauri::generate_context!())

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use chrono::Utc;
 use serde::Serialize;
@@ -6,13 +6,19 @@ use tauri::{AppHandle, Emitter, Manager, State, async_runtime::JoinHandle};
 use tokio::sync::Mutex;
 use wacore::{
     download::MediaType,
+    iq::spec::IqSpec,
     proto_helpers::MessageExt,
+    request::InfoQuery,
     types::{
         events::Event,
         presence::{ChatPresence, ReceiptType},
     },
 };
-use wacore_binary::jid::{Jid, JidExt};
+use wacore_binary::{
+    builder::NodeBuilder,
+    jid::{DEFAULT_USER_SERVER, Jid, JidExt},
+    node::{Node, NodeContent},
+};
 use waproto::whatsapp as wa;
 use whatsapp_rust::{
     Client, StatusPrivacySetting, StatusSendOptions, TokioRuntime, bot::Bot,
@@ -22,6 +28,40 @@ use whatsapp_rust_tokio_transport::TokioWebSocketTransportFactory;
 use whatsapp_rust_ureq_http_client::UreqHttpClient;
 
 type CommandResult<T> = Result<T, String>;
+const SESSION_DB_FILE: &str = "whatsapp-session.db";
+const LOGOUT_TIMEOUT: Duration = Duration::from_secs(3);
+
+struct RemoveCompanionDeviceSpec {
+    jid: Jid,
+}
+
+impl RemoveCompanionDeviceSpec {
+    fn new(jid: &Jid) -> Self {
+        Self { jid: jid.clone() }
+    }
+}
+
+impl IqSpec for RemoveCompanionDeviceSpec {
+    type Response = ();
+
+    fn build_iq(&self) -> InfoQuery<'static> {
+        let child = NodeBuilder::new("remove-companion-device")
+            .attr("jid", self.jid.clone())
+            .attr("reason", "user_initiated")
+            .build();
+
+        InfoQuery::set(
+            "md",
+            Jid::new("", DEFAULT_USER_SERVER),
+            Some(NodeContent::Nodes(vec![child])),
+        )
+        .with_timeout(LOGOUT_TIMEOUT)
+    }
+
+    fn parse_response(&self, _response: &Node) -> Result<Self::Response, anyhow::Error> {
+        Ok(())
+    }
+}
 
 #[derive(Clone, Copy)]
 enum SessionMode {
@@ -532,6 +572,70 @@ pub async fn disconnect_session(
     })
 }
 
+#[tauri::command]
+pub async fn logout_session(
+    app: AppHandle,
+    state: State<'_, WhatsmoState>,
+) -> CommandResult<ConnectionPayload> {
+    let client = {
+        let guard = state.inner.lock().await;
+        guard.client.clone().ok_or_else(|| {
+            "WhatsApp session is not running. Resume the session before unlinking.".to_string()
+        })?
+    };
+
+    if !client.is_connected() {
+        return Err(
+            "WhatsApp session is not connected yet. Wait until it reconnects before unlinking."
+                .to_string(),
+        );
+    }
+
+    let Some(pn) = client.get_pn().await else {
+        return Err("Cannot unlink: this session has no paired phone-number JID.".to_string());
+    };
+
+    client
+        .execute(RemoveCompanionDeviceSpec::new(&pn))
+        .await
+        .map_err(|error| {
+            format!("Failed to unlink this companion device from WhatsApp: {error}")
+        })?;
+    client.disconnect().await;
+    drop(client);
+
+    {
+        let mut guard = state.inner.lock().await;
+        if let Some(runner) = guard.runner.take() {
+            runner.abort();
+        }
+        guard.client = None;
+        guard.connected = false;
+        guard.status_message = "WhatsApp companion unlinked. Pair again to continue.".to_string();
+    }
+
+    clear_session_files(&app).await?;
+
+    let payload = AuthPayload {
+        mode: AuthMode::LoggedOut,
+        qr_code: None,
+        pair_code: None,
+        phone_number: None,
+        message: Some("WhatsApp companion unlinked. Pair again to continue.".to_string()),
+    };
+    emit_auth(&app, payload);
+    emit_connection(
+        &app,
+        false,
+        "WhatsApp companion unlinked. Pair again to continue.".to_string(),
+    );
+
+    Ok(ConnectionPayload {
+        connected: false,
+        message: "WhatsApp companion unlinked. Pair again to continue.".to_string(),
+    })
+}
+
 async fn start_session(
     app: AppHandle,
     state: Arc<Mutex<BridgeRuntime>>,
@@ -561,7 +665,7 @@ async fn start_session(
     tokio::fs::create_dir_all(&app_data_dir)
         .await
         .map_err(|error| format!("Could not create app data directory: {error}"))?;
-    let db_path = app_data_dir.join("whatsapp-session.db");
+    let db_path = app_data_dir.join(SESSION_DB_FILE);
     let db_path = db_path.to_string_lossy().to_string();
 
     {
@@ -821,6 +925,28 @@ fn emit_connection(app: &AppHandle, connected: bool, message: String) {
         "whatsmo://connection",
         ConnectionPayload { connected, message },
     );
+}
+
+async fn clear_session_files(app: &AppHandle) -> CommandResult<()> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Could not resolve app data directory: {error}"))?;
+    for suffix in ["", "-shm", "-wal"] {
+        let path = app_data_dir.join(format!("{SESSION_DB_FILE}{suffix}"));
+        match tokio::fs::remove_file(&path).await {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(format!(
+                    "Failed to remove local session file {}: {error}",
+                    path.display()
+                ));
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn receipt_status(receipt_type: &ReceiptType) -> Option<&'static str> {
