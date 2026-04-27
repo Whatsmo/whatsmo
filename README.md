@@ -133,7 +133,7 @@ Legend:
 ### Media and files
 
 - [x] Chat image/video/document upload and send through `client.upload(...)` + `client.send_message(...)`
-- [ ] Incoming media download/decryption and local cache
+- [x] Incoming image/video/document download/decryption and small local preview cache
 - [ ] Media preview grid for chats and profiles
 - [x] Android/WebView file picker integration for chat attachments
 - [ ] Thumbnail generation pipeline for images/videos
