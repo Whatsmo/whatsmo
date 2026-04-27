@@ -8,6 +8,7 @@
   export let onBack: () => void = () => undefined;
   export let onSend: (chatId: string, text: string) => void;
   export let onRetry: (chatId: string, messageId: string) => void = () => undefined;
+  export let onDownloadMedia: (chatId: string, messageId: string) => void = () => undefined;
   export let onAttach: (chatId: string, file: File) => void;
 
   const MESSAGE_PAGE_SIZE = 50;
@@ -58,7 +59,11 @@
     {/if}
     <div class="day-chip">Today</div>
     {#each visibleMessages as message (message.id)}
-      <MessageBubble {message} onRetry={() => onRetry(chat.id, message.id)} />
+      <MessageBubble
+        {message}
+        onRetry={() => onRetry(chat.id, message.id)}
+        onDownloadMedia={() => onDownloadMedia(chat.id, message.id)}
+      />
     {/each}
   </div>
 

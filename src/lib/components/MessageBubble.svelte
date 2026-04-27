@@ -3,11 +3,13 @@
 
   export let message: ChatMessage;
   export let onRetry: (message: ChatMessage) => void = () => undefined;
+  export let onDownloadMedia: (message: ChatMessage) => void = () => undefined;
 
   const formatter = new Intl.DateTimeFormat('en', { hour: '2-digit', minute: '2-digit' });
 
   $: ticks = message.status === 'failed' ? '!' : message.status === 'queued' ? '◷' : '✓✓';
   $: canRetry = message.fromMe && message.status === 'failed' && Boolean(message.text) && !message.deleted;
+  $: canDownload = Boolean(message.media && !message.media.cachedDataUrl && message.media.directPath);
 </script>
 
 <article class:mine={message.fromMe} class="bubble">
@@ -16,6 +18,15 @@
   {:else if message.media}
     <div class="media-card">
       <span>{message.media.kind}</span>
+      {#if message.media.cachedDataUrl && message.media.kind === 'image'}
+        <img src={message.media.cachedDataUrl} alt={message.media.name} />
+      {:else if message.media.cachedDataUrl && message.media.kind === 'video'}
+        <video src={message.media.cachedDataUrl} controls preload="metadata">
+          <track kind="captions" />
+        </video>
+      {:else if message.media.cachedDataUrl}
+        <a href={message.media.cachedDataUrl} download={message.media.name}>Open downloaded file</a>
+      {/if}
       <strong>{message.media.name}</strong>
     </div>
   {/if}
@@ -33,6 +44,9 @@
   </footer>
   {#if canRetry}
     <button class="retry-button" on:click={() => onRetry(message)}>Retry</button>
+  {/if}
+  {#if canDownload}
+    <button class="download-button" on:click={() => onDownloadMedia(message)}>Download</button>
   {/if}
 </article>
 
@@ -86,7 +100,8 @@
     font-style: italic;
   }
 
-  .retry-button {
+  .retry-button,
+  .download-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -100,6 +115,10 @@
     font-size: 0.74rem;
     font-weight: 900;
     background: #b3261e;
+  }
+
+  .download-button {
+    background: var(--wa-green, #008069);
   }
 
   .media-card {
@@ -130,6 +149,19 @@
 
   .media-card strong {
     align-self: end;
+  }
+
+  .media-card img,
+  .media-card video {
+    width: 100%;
+    max-height: 210px;
+    border-radius: 8px;
+    object-fit: cover;
+  }
+
+  .media-card a {
+    color: #d9fdd3;
+    font-weight: 900;
   }
 
   @keyframes rise {

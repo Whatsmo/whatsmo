@@ -55,6 +55,15 @@ export interface MediaAttachment {
   kind: MediaKind;
   name: string;
   previewUrl?: string;
+  cachedDataUrl?: string;
+  cachedAt?: number;
+  mimeType?: string;
+  directPath?: string;
+  mediaKey?: number[];
+  fileSha256?: number[];
+  fileEncSha256?: number[];
+  fileLength?: number;
+  thumbnail?: number[];
 }
 
 export interface ChatMessage {
@@ -119,6 +128,7 @@ export interface IncomingMessagePayload {
   fromMe: boolean;
   eventKind: MessageEventKind;
   targetMessageId?: string;
+  media?: MediaAttachment;
 }
 
 export interface HistorySyncPayload {
@@ -154,6 +164,14 @@ export interface OutgoingMediaPayload {
   name: string;
   caption?: string;
   timestampMs: number;
+}
+
+export interface DownloadedMediaPayload {
+  kind: MediaKind;
+  name: string;
+  mimeType: string;
+  size: number;
+  data: number[];
 }
 
 export interface StatusPostPayload {

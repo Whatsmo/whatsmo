@@ -14,6 +14,7 @@ import type {
   ContactProfilePayload,
   ContactSyncRequestedPayload,
   ContactUpdatedPayload,
+  DownloadedMediaPayload,
   GroupMetadataPayload,
   HistorySyncPayload,
   HistorySyncProgressPayload,
@@ -157,6 +158,42 @@ export async function sendMediaMessage(
     fileName,
     caption,
     durationSeconds
+  });
+}
+
+export async function downloadMediaAttachment(media: {
+  kind: MediaKind;
+  name: string;
+  mimeType?: string;
+  directPath?: string;
+  mediaKey?: number[];
+  fileSha256?: number[];
+  fileEncSha256?: number[];
+  fileLength?: number;
+}): Promise<DownloadedMediaPayload> {
+  if (!media.directPath || !media.mediaKey || !media.fileSha256 || !media.fileEncSha256 || !media.fileLength) {
+    throw new Error('Attachment is missing download metadata.');
+  }
+
+  if (!isTauriRuntime()) {
+    return {
+      kind: media.kind,
+      name: media.name,
+      mimeType: media.mimeType ?? 'application/octet-stream',
+      size: 0,
+      data: []
+    };
+  }
+
+  return invoke<DownloadedMediaPayload>('download_media_attachment', {
+    kind: media.kind,
+    name: media.name,
+    mimeType: media.mimeType ?? 'application/octet-stream',
+    directPath: media.directPath,
+    mediaKey: media.mediaKey,
+    fileSha256: media.fileSha256,
+    fileEncSha256: media.fileEncSha256,
+    fileLength: media.fileLength
   });
 }
 

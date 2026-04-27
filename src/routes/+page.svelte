@@ -9,6 +9,7 @@
   import { connectBridge } from '$lib/api/whatsmo';
   import {
     appState,
+    downloadAttachment,
     handleContactNumberChanged,
     handleContactSyncRequested,
     handleContactUpdated,
@@ -117,6 +118,7 @@
         onBack={() => (activeScreen = 'chats')}
         onSend={sendMessage}
         onRetry={retryMessage}
+        onDownloadMedia={downloadAttachment}
         onAttach={handleAttachment}
       />
     {:else}

@@ -12,10 +12,12 @@ import type {
   ContactProfilePayload,
   ContactSyncRequestedPayload,
   ContactUpdatedPayload,
+  DownloadedMediaPayload,
   GroupMetadataPayload,
   HistorySyncPayload,
   HistorySyncProgressPayload,
   IncomingMessagePayload,
+  MediaAttachment,
   MediaKind,
   ReceiptPayload,
   SessionStatusPayload,
@@ -23,6 +25,7 @@ import type {
 } from '$lib/api/types';
 import {
   enableNotifications,
+  downloadMediaAttachment,
   getAccountDevice,
   getSessionStatus,
   isTauriRuntime,
@@ -39,6 +42,7 @@ const now = Date.now();
 const STORAGE_KEY = 'whatsmo.chat-state.v1';
 const MAX_PERSISTED_MESSAGES_PER_CHAT = 120;
 const MAX_ATTACHMENT_BYTES = 64 * 1024 * 1024;
+const MAX_CACHED_MEDIA_BYTES = 8 * 1024 * 1024;
 const queuedRetryKeys = new Set<string>();
 let queuedRetryTimer: number | undefined;
 let groupMetadataTimer: number | undefined;
@@ -532,6 +536,47 @@ export async function retryQueuedMessages(chatId?: string): Promise<void> {
   }
 }
 
+export async function downloadAttachment(chatId: string, messageId: string): Promise<void> {
+  const message = get(appState).messages[chatId]?.find((item) => item.id === messageId);
+  if (!message?.media) return;
+
+  if (message.media.cachedDataUrl) {
+    return;
+  }
+
+  const downloaded = await downloadMediaAttachment(message.media);
+  if (downloaded.size > MAX_CACHED_MEDIA_BYTES) {
+    throw new Error('Attachment downloaded, but it is too large to cache in the WebView preview store.');
+  }
+
+  cacheDownloadedMedia(chatId, messageId, downloaded);
+}
+
+function cacheDownloadedMedia(chatId: string, messageId: string, downloaded: DownloadedMediaPayload): void {
+  const dataUrl = bytesToDataUrl(downloaded.data, downloaded.mimeType);
+  appState.update((state) => ({
+    ...state,
+    messages: {
+      ...state.messages,
+      [chatId]: (state.messages[chatId] ?? []).map((message) =>
+        message.id === messageId && message.media
+          ? {
+              ...message,
+              media: {
+                ...message.media,
+                name: downloaded.name || message.media.name,
+                kind: downloaded.kind,
+                mimeType: downloaded.mimeType,
+                cachedDataUrl: dataUrl,
+                cachedAt: Date.now()
+              }
+            }
+          : message
+      )
+    }
+  }));
+}
+
 export function ingestIncomingMessage(payload: IncomingMessagePayload): void {
   if (payload.eventKind === 'edit') {
     applyMessageEdit(payload);
@@ -554,7 +599,8 @@ export function ingestIncomingMessage(payload: IncomingMessagePayload): void {
     text: payload.text,
     timestamp: payload.timestampMs,
     fromMe: payload.fromMe,
-    status: payload.fromMe ? 'sent' : 'delivered'
+    status: payload.fromMe ? 'sent' : 'delivered',
+    media: payload.media
   };
 
   appendMessage(message);
@@ -794,7 +840,8 @@ function messageFromIncomingPayload(payload: IncomingMessagePayload): ChatMessag
     text: payload.text,
     timestamp: payload.timestampMs,
     fromMe: payload.fromMe,
-    status: payload.fromMe ? 'sent' : 'delivered'
+    status: payload.fromMe ? 'sent' : 'delivered',
+    media: payload.media
   };
 }
 
@@ -910,6 +957,17 @@ function fallbackMimeType(kind: MediaKind): string {
   if (kind === 'image') return 'image/jpeg';
   if (kind === 'video') return 'video/mp4';
   return 'application/octet-stream';
+}
+
+function bytesToDataUrl(bytes: number[], mimeType: string): string {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.slice(index, index + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+
+  return `data:${mimeType};base64,${window.btoa(binary)}`;
 }
 
 function createInitialState(): AppModel {
