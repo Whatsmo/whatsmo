@@ -3,10 +3,11 @@
 
   const dispatch = createEventDispatcher<{
     send: string;
-    attach: void;
+    attach: File;
   }>();
 
   let draft = '';
+  let fileInput: HTMLInputElement;
 
   function submit(): void {
     const text = draft.trim();
@@ -17,13 +18,33 @@
     dispatch('send', text);
     draft = '';
   }
+
+  function openFilePicker(): void {
+    fileInput.click();
+  }
+
+  function handleFileChange(): void {
+    const file = fileInput.files?.[0];
+    fileInput.value = '';
+    if (file) {
+      dispatch('attach', file);
+    }
+  }
 </script>
 
 <form class="composer" on:submit|preventDefault={submit}>
   <div class="input-wrapper">
-    <button type="button" class="ghost" aria-label="Attach media" on:click={() => dispatch('attach')}>
+    <button type="button" class="ghost" aria-label="Attach media" on:click={openFilePicker}>
       <span class="material-symbols-rounded">add</span>
     </button>
+    <input
+      bind:this={fileInput}
+      class="file-input"
+      type="file"
+      accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar,.7z"
+      on:change={handleFileChange}
+      aria-label="Choose attachment"
+    />
     <input bind:value={draft} placeholder="Message" aria-label="Message" />
   </div>
   <button type="submit" class="send" aria-label="Send message">
@@ -64,6 +85,16 @@
     color: var(--ink, #101f1b);
     background: transparent;
     font-size: 1rem;
+  }
+
+  .file-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    clip-path: inset(50%);
   }
 
   button {

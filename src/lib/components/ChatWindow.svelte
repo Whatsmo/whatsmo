@@ -8,7 +8,7 @@
   export let onBack: () => void = () => undefined;
   export let onSend: (chatId: string, text: string) => void;
   export let onRetry: (chatId: string, messageId: string) => void = () => undefined;
-  export let onAttach: () => void;
+  export let onAttach: (chatId: string, file: File) => void;
 
   const MESSAGE_PAGE_SIZE = 50;
 
@@ -62,7 +62,7 @@
     {/each}
   </div>
 
-  <ChatComposer on:send={(event) => onSend(chat.id, event.detail)} on:attach={onAttach} />
+  <ChatComposer on:send={(event) => onSend(chat.id, event.detail)} on:attach={(event) => onAttach(chat.id, event.detail)} />
 </section>
 
 <style>
