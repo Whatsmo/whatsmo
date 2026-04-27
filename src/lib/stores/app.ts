@@ -1,5 +1,6 @@
 import { derived, get, writable } from 'svelte/store';
 import type {
+  AccountDevicePayload,
   AppModel,
   AuthPayload,
   ChatMessage,
@@ -14,6 +15,7 @@ import type {
 } from '$lib/api/types';
 import {
   enableNotifications,
+  getAccountDevice,
   getSessionStatus,
   isTauriRuntime,
   notifyNewMessage,
@@ -207,6 +209,7 @@ export function setAuth(payload: AuthPayload): void {
 export function setConnection(payload: ConnectionPayload): void {
   appState.update((state) => ({
     ...state,
+    account: payload.connected ? state.account : null,
     auth: {
       mode: payload.connected ? 'connected' : 'logged-out',
       message: payload.message
@@ -245,6 +248,19 @@ export async function refreshSessionStatus(): Promise<void> {
   setSessionStatus(status);
 }
 
+export function setAccountDevice(payload: AccountDevicePayload | null): void {
+  appState.update((state) => ({ ...state, account: payload }));
+}
+
+export async function refreshAccountDevice(): Promise<void> {
+  try {
+    const account = await getAccountDevice();
+    setAccountDevice(account);
+  } catch (error) {
+    console.warn('Could not refresh account/device details', error);
+  }
+}
+
 export async function resumeSession(): Promise<void> {
   appState.update((state) => ({
     ...state,
@@ -257,6 +273,7 @@ export async function resumeSession(): Promise<void> {
   try {
     const status = await resumeSavedSession();
     setSessionStatus(status);
+    await refreshAccountDevice();
   } catch (error) {
     appState.update((state) => ({
       ...state,
@@ -430,6 +447,7 @@ function createInitialState(): AppModel {
         mode: 'idle',
         message: 'Restoring saved WhatsApp session...'
       },
+      account: null,
       chats: persisted.chats,
       messages: persisted.messages,
       contacts: persisted.contacts,
@@ -445,6 +463,7 @@ function createInitialState(): AppModel {
       mode: 'idle',
       message: 'Pair this companion client with QR code or phone number code.'
     },
+    account: null,
     chats: shouldSeedPreview ? chats : [],
     messages: shouldSeedPreview ? messages : {},
     contacts: shouldSeedPreview ? contacts : [],

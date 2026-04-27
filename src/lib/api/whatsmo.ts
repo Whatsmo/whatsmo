@@ -7,6 +7,7 @@ import {
 } from '@tauri-apps/plugin-notification';
 import type {
   AuthPayload,
+  AccountDevicePayload,
   ConnectionPayload,
   ContactLookupPayload,
   IncomingMessagePayload,
@@ -75,6 +76,23 @@ export async function getSessionStatus(): Promise<SessionStatusPayload> {
   }
 
   return invoke<SessionStatusPayload>('get_session_status');
+}
+
+export async function getAccountDevice(): Promise<AccountDevicePayload> {
+  if (!isTauriRuntime()) {
+    return {
+      connected: false,
+      loggedIn: false,
+      running: false,
+      deviceName: 'Browser preview',
+      phoneJid: '6281299012345@s.whatsapp.net',
+      lidJid: '100000012345678@lid',
+      pushName: 'Preview account',
+      message: 'Browser preview is not connected to WhatsApp.'
+    };
+  }
+
+  return invoke<AccountDevicePayload>('get_account_device');
 }
 
 export async function resumeSavedSession(): Promise<SessionStatusPayload> {

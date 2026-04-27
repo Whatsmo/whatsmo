@@ -19,6 +19,17 @@ export interface SessionStatusPayload {
   message: string;
 }
 
+export interface AccountDevicePayload {
+  connected: boolean;
+  loggedIn: boolean;
+  running: boolean;
+  deviceName: string;
+  phoneJid?: string;
+  lidJid?: string;
+  pushName?: string;
+  message: string;
+}
+
 export type ChatKind = 'direct' | 'group';
 export type MessageStatus = 'queued' | 'sent' | 'delivered' | 'read' | 'played' | 'failed';
 export type MediaKind = 'image' | 'video' | 'document' | 'audio';
@@ -112,6 +123,7 @@ export interface ReceiptPayload {
 
 export interface AppModel {
   auth: AuthPayload;
+  account: AccountDevicePayload | null;
   chats: ChatSummary[];
   messages: Record<string, ChatMessage[]>;
   contacts: ContactProfile[];
