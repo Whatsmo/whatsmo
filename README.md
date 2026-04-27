@@ -79,7 +79,7 @@ Legend:
 - [x] Runtime session status command (`get_session_status`)
 - [x] Disconnect local runtime session (`disconnect_session`)
 - [x] Full WhatsApp unlink/logout flow from the server side, plus local session DB cleanup
-- [ ] Account/device details screen showing linked JID, device name, and connection health
+- [x] Account/device details screen showing linked JID, device name, and connection health
 
 ### Chat and messaging
 
