@@ -9,6 +9,7 @@
   import {
     appState,
     ingestIncomingMessage,
+    refreshAccountDevice,
     requestNotifications,
     resumeSession,
     selectedChat,
@@ -28,8 +29,14 @@
   onMount(() => {
     void requestNotifications();
     void connectBridge({
-      onAuth: setAuth,
-      onConnection: setConnection,
+      onAuth: (payload) => {
+        setAuth(payload);
+        if (payload.mode === 'connected') void refreshAccountDevice();
+      },
+      onConnection: (payload) => {
+        setConnection(payload);
+        if (payload.connected) void refreshAccountDevice();
+      },
       onMessage: ingestIncomingMessage,
       onTyping: setTyping,
       onReceipt: setReceipt
@@ -81,7 +88,7 @@
           <span class:online={$appState.auth.mode === 'connected'} class="connection-dot" aria-label="Connection status"></span>
         </header>
 
-        <AuthPanel auth={$appState.auth} />
+        <AuthPanel auth={$appState.auth} account={$appState.account} />
 
         {#if activeScreen === 'chats'}
           <ChatList chats={$appState.chats} selectedChatId={$appState.selectedChatId} onSelect={openChat} />

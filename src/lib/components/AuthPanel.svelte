@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import QRCode from 'qrcode';
-  import type { AuthPayload } from '$lib/api/types';
+  import type { AccountDevicePayload, AuthPayload } from '$lib/api/types';
   import { disconnectSession, logoutSession, requestPairCode, startQrAuth } from '$lib/api/whatsmo';
-  import { requestNotifications, setAuth, setConnection } from '$lib/stores/app';
+  import { refreshAccountDevice, requestNotifications, setAuth, setConnection } from '$lib/stores/app';
 
   export let auth: AuthPayload;
+  export let account: AccountDevicePayload | null = null;
 
   let phoneNumber = '';
   let qrSvg = '';
@@ -60,6 +61,7 @@
     busy = true;
     try {
       setConnection(await disconnectSession());
+      await refreshAccountDevice();
     } catch (error) {
       setAuth({ mode: 'error', message: error instanceof Error ? error.message : String(error) });
     } finally {
@@ -77,6 +79,7 @@
     setAuth({ mode: 'connecting', message: 'Unlinking this companion from WhatsApp...' });
     try {
       setConnection(await logoutSession());
+      await refreshAccountDevice();
     } catch (error) {
       setAuth({ mode: 'error', message: error instanceof Error ? error.message : String(error) });
     } finally {
@@ -93,6 +96,35 @@
   </div>
 
   {#if auth.mode === 'connected'}
+    <div class="account-details" aria-label="Account and device details">
+      <div>
+        <span>Account</span>
+        <strong>{account?.pushName ?? account?.phoneJid ?? 'Linked account'}</strong>
+      </div>
+      <div>
+        <span>Phone JID</span>
+        <strong>{account?.phoneJid ?? 'Not available yet'}</strong>
+      </div>
+      <div>
+        <span>LID</span>
+        <strong>{account?.lidJid ?? 'Not available yet'}</strong>
+      </div>
+      <div>
+        <span>Device</span>
+        <strong>{account?.deviceName ?? 'Whatsmo mobile companion'}</strong>
+      </div>
+      <div>
+        <span>Health</span>
+        <strong class:healthy={account?.connected && account?.loggedIn}>
+          {account?.connected && account?.loggedIn
+            ? 'Connected + logged in'
+            : account?.running
+              ? 'Running, waiting for auth'
+              : 'Stopped'}
+        </strong>
+      </div>
+    </div>
+
     <div class="session-actions">
       <button class="secondary-button" disabled={busy} on:click={disconnectLocal}>Stop locally</button>
       <button class="danger-button" disabled={busy} on:click={unlinkDevice}>Unlink</button>
@@ -211,6 +243,42 @@
     gap: 8px;
     flex-wrap: wrap;
     margin-top: 5px;
+  }
+
+  .account-details {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 8px;
+    margin-top: 6px;
+    padding: 10px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  .account-details div {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .account-details span {
+    color: #667781;
+    font-size: 0.7rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .account-details strong {
+    overflow: hidden;
+    color: #0b211a;
+    font-size: 0.8rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .account-details strong.healthy {
+    color: var(--wa-green, #008069);
   }
 
   .secondary-button,
