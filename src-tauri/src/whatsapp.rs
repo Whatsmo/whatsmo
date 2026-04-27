@@ -152,6 +152,40 @@ pub struct IncomingMessagePayload {
     event_kind: MessageEventKind,
     #[serde(skip_serializing_if = "Option::is_none")]
     target_message_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    media: Option<MediaAttachmentPayload>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaAttachmentPayload {
+    id: String,
+    kind: String,
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mime_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    direct_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    media_key: Option<Vec<u8>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    file_sha256: Option<Vec<u8>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    file_enc_sha256: Option<Vec<u8>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    file_length: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    thumbnail: Option<Vec<u8>>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadedMediaPayload {
+    kind: String,
+    name: String,
+    mime_type: String,
+    size: usize,
+    data: Vec<u8>,
 }
 
 #[derive(Clone, Serialize)]
@@ -527,6 +561,55 @@ pub async fn send_media_message(
         name: clean_name,
         caption: clean_caption,
         timestamp_ms: Utc::now().timestamp_millis(),
+    })
+}
+
+#[tauri::command]
+pub async fn download_media_attachment(
+    state: State<'_, WhatsmoState>,
+    kind: String,
+    name: String,
+    mime_type: String,
+    direct_path: String,
+    media_key: Vec<u8>,
+    file_sha256: Vec<u8>,
+    file_enc_sha256: Vec<u8>,
+    file_length: u64,
+) -> CommandResult<DownloadedMediaPayload> {
+    if direct_path.trim().is_empty() {
+        return Err("Attachment is missing its CDN direct path.".to_string());
+    }
+
+    let media_type = match kind.as_str() {
+        "image" => MediaType::Image,
+        "video" => MediaType::Video,
+        "document" => MediaType::Document,
+        other => return Err(format!("Unsupported attachment kind: {other}")),
+    };
+    let client = connected_client(&state).await?;
+    let data = client
+        .download_from_params(
+            &direct_path,
+            &media_key,
+            &file_sha256,
+            &file_enc_sha256,
+            file_length,
+            media_type,
+        )
+        .await
+        .map_err(|error| format!("Failed to download attachment: {error}"))?;
+    let mime_type = if mime_type.trim().is_empty() {
+        fallback_media_mime(&kind).to_string()
+    } else {
+        mime_type
+    };
+
+    Ok(DownloadedMediaPayload {
+        kind,
+        name,
+        mime_type,
+        size: data.len(),
+        data,
     })
 }
 
@@ -1191,6 +1274,7 @@ async fn start_session(
                                 .target_id
                                 .as_ref()
                                 .map(ToString::to_string),
+                            media: media_attachment_payload(&info.id.to_string(), &message),
                         };
                         emit_event(&app, "whatsmo://message", payload);
                     }
@@ -1529,7 +1613,7 @@ fn history_message_payload(
         .or_else(|| message.get_caption().map(ToString::to_string));
 
     Some(IncomingMessagePayload {
-        id,
+        id: id.clone(),
         chat_id,
         sender_id,
         text,
@@ -1541,7 +1625,75 @@ fn history_message_payload(
         from_me,
         event_kind: MessageEventKind::Message,
         target_message_id: None,
+        media: media_attachment_payload(&id, message),
     })
+}
+
+fn media_attachment_payload(
+    message_id: &str,
+    message: &wa::Message,
+) -> Option<MediaAttachmentPayload> {
+    let base = message.get_base_message();
+    if let Some(image) = &base.image_message {
+        return Some(MediaAttachmentPayload {
+            id: format!("{message_id}:image"),
+            kind: "image".to_string(),
+            name: image
+                .caption
+                .as_ref()
+                .filter(|value| !value.trim().is_empty())
+                .cloned()
+                .unwrap_or_else(|| "Image".to_string()),
+            mime_type: image.mimetype.clone(),
+            direct_path: image.direct_path.clone(),
+            media_key: image.media_key.clone(),
+            file_sha256: image.file_sha256.clone(),
+            file_enc_sha256: image.file_enc_sha256.clone(),
+            file_length: image.file_length,
+            thumbnail: image.jpeg_thumbnail.clone(),
+        });
+    }
+
+    if let Some(video) = &base.video_message {
+        return Some(MediaAttachmentPayload {
+            id: format!("{message_id}:video"),
+            kind: "video".to_string(),
+            name: video
+                .caption
+                .as_ref()
+                .filter(|value| !value.trim().is_empty())
+                .cloned()
+                .unwrap_or_else(|| "Video".to_string()),
+            mime_type: video.mimetype.clone(),
+            direct_path: video.direct_path.clone(),
+            media_key: video.media_key.clone(),
+            file_sha256: video.file_sha256.clone(),
+            file_enc_sha256: video.file_enc_sha256.clone(),
+            file_length: video.file_length,
+            thumbnail: video.jpeg_thumbnail.clone(),
+        });
+    }
+
+    if let Some(document) = &base.document_message {
+        return Some(MediaAttachmentPayload {
+            id: format!("{message_id}:document"),
+            kind: "document".to_string(),
+            name: document
+                .file_name
+                .clone()
+                .or_else(|| document.title.clone())
+                .unwrap_or_else(|| "Document".to_string()),
+            mime_type: document.mimetype.clone(),
+            direct_path: document.direct_path.clone(),
+            media_key: document.media_key.clone(),
+            file_sha256: document.file_sha256.clone(),
+            file_enc_sha256: document.file_enc_sha256.clone(),
+            file_length: document.file_length,
+            thumbnail: document.jpeg_thumbnail.clone(),
+        });
+    }
+
+    None
 }
 
 fn message_event_kind(edit: &wacore::types::message::EditAttribute) -> MessageEventKind {
@@ -1553,6 +1705,15 @@ fn message_event_kind(edit: &wacore::types::message::EditAttribute) -> MessageEv
         EditAttribute::AdminRevoke => MessageEventKind::AdminRevoke,
         EditAttribute::Empty => MessageEventKind::Message,
         EditAttribute::PinInChat | EditAttribute::Unknown(_) => MessageEventKind::Other,
+    }
+}
+
+fn fallback_media_mime(kind: &str) -> &'static str {
+    match kind {
+        "image" => "image/jpeg",
+        "video" => "video/mp4",
+        "document" => "application/octet-stream",
+        _ => "application/octet-stream",
     }
 }
 
