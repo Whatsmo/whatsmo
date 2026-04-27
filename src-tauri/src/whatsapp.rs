@@ -198,6 +198,18 @@ pub struct OutgoingMessagePayload {
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct OutgoingMediaPayload {
+    id: String,
+    chat_id: String,
+    kind: String,
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    caption: Option<String>,
+    timestamp_ms: i64,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReceiptPayload {
     chat_id: String,
     message_id: String,
@@ -248,6 +260,33 @@ pub struct ContactProfilePayload {
     avatar_url: Option<String>,
     is_business: bool,
     updated_at_ms: i64,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContactUpdatedPayload {
+    jid: String,
+    timestamp_ms: i64,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContactNumberChangedPayload {
+    old_jid: String,
+    new_jid: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    old_lid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    new_lid: Option<String>,
+    timestamp_ms: i64,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContactSyncRequestedPayload {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    after_ms: Option<i64>,
+    timestamp_ms: i64,
 }
 
 #[derive(Clone, Serialize)]
@@ -373,6 +412,120 @@ pub async fn send_text_message(
         id: message_id,
         chat_id,
         text: trimmed,
+        timestamp_ms: Utc::now().timestamp_millis(),
+    })
+}
+
+#[tauri::command]
+pub async fn send_media_message(
+    state: State<'_, WhatsmoState>,
+    chat_id: String,
+    kind: String,
+    data: Vec<u8>,
+    mime_type: String,
+    file_name: String,
+    caption: Option<String>,
+    duration_seconds: Option<u32>,
+) -> CommandResult<OutgoingMediaPayload> {
+    const MAX_MEDIA_BYTES: usize = 64 * 1024 * 1024;
+
+    if data.is_empty() {
+        return Err("Attachment file is empty.".to_string());
+    }
+    if data.len() > MAX_MEDIA_BYTES {
+        return Err("Attachment is too large. Maximum supported size is 64 MB.".to_string());
+    }
+
+    let client = connected_client(&state).await?;
+    let jid = chat_id
+        .parse::<Jid>()
+        .map_err(|error| format!("Invalid chat id: {error}"))?;
+    let media_type = match kind.as_str() {
+        "image" => MediaType::Image,
+        "video" => MediaType::Video,
+        "document" => MediaType::Document,
+        other => return Err(format!("Unsupported attachment kind: {other}")),
+    };
+    let upload = client
+        .upload(data, media_type)
+        .await
+        .map_err(|error| format!("Failed to upload attachment: {error}"))?;
+    let clean_caption = caption
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string);
+    let clean_name = if file_name.trim().is_empty() {
+        "attachment".to_string()
+    } else {
+        file_name.trim().to_string()
+    };
+    let clean_mime = if mime_type.trim().is_empty() {
+        "application/octet-stream".to_string()
+    } else {
+        mime_type.trim().to_string()
+    };
+
+    let message = match kind.as_str() {
+        "image" => wa::Message {
+            image_message: Some(Box::new(wa::message::ImageMessage {
+                url: Some(upload.url),
+                direct_path: Some(upload.direct_path),
+                media_key: Some(upload.media_key),
+                file_enc_sha256: Some(upload.file_enc_sha256),
+                file_sha256: Some(upload.file_sha256),
+                file_length: Some(upload.file_length),
+                mimetype: Some(clean_mime.clone()),
+                caption: clean_caption.clone(),
+                ..Default::default()
+            })),
+            ..Default::default()
+        },
+        "video" => wa::Message {
+            video_message: Some(Box::new(wa::message::VideoMessage {
+                url: Some(upload.url),
+                direct_path: Some(upload.direct_path),
+                media_key: Some(upload.media_key),
+                file_enc_sha256: Some(upload.file_enc_sha256),
+                file_sha256: Some(upload.file_sha256),
+                file_length: Some(upload.file_length),
+                mimetype: Some(clean_mime.clone()),
+                caption: clean_caption.clone(),
+                seconds: duration_seconds,
+                ..Default::default()
+            })),
+            ..Default::default()
+        },
+        "document" => wa::Message {
+            document_message: Some(Box::new(wa::message::DocumentMessage {
+                url: Some(upload.url),
+                direct_path: Some(upload.direct_path),
+                media_key: Some(upload.media_key),
+                file_enc_sha256: Some(upload.file_enc_sha256),
+                file_sha256: Some(upload.file_sha256),
+                file_length: Some(upload.file_length),
+                mimetype: Some(clean_mime.clone()),
+                title: Some(clean_name.clone()),
+                file_name: Some(clean_name.clone()),
+                caption: clean_caption.clone(),
+                ..Default::default()
+            })),
+            ..Default::default()
+        },
+        _ => unreachable!(),
+    };
+
+    let message_id = client
+        .send_message(jid, message)
+        .await
+        .map_err(|error| format!("Failed to send attachment: {error}"))?;
+
+    Ok(OutgoingMediaPayload {
+        id: message_id,
+        chat_id,
+        kind,
+        name: clean_name,
+        caption: clean_caption,
         timestamp_ms: Utc::now().timestamp_millis(),
     })
 }
@@ -1105,6 +1258,69 @@ async fn start_session(
                                 chat_id: presence.source.chat.to_string(),
                                 name: presence.source.sender.to_string(),
                                 is_typing: matches!(presence.state, ChatPresence::Composing),
+                            },
+                        );
+                    }
+                    Event::PictureUpdate(update) => {
+                        emit_event(
+                            &app,
+                            "whatsmo://contact-updated",
+                            ContactUpdatedPayload {
+                                jid: update.jid.to_string(),
+                                timestamp_ms: update.timestamp.timestamp_millis(),
+                            },
+                        );
+                    }
+                    Event::UserAboutUpdate(update) => {
+                        emit_event(
+                            &app,
+                            "whatsmo://contact-updated",
+                            ContactUpdatedPayload {
+                                jid: update.jid.to_string(),
+                                timestamp_ms: update.timestamp.timestamp_millis(),
+                            },
+                        );
+                    }
+                    Event::PushNameUpdate(update) => {
+                        emit_event(
+                            &app,
+                            "whatsmo://contact-updated",
+                            ContactUpdatedPayload {
+                                jid: update.jid.to_string(),
+                                timestamp_ms: update.message.timestamp.timestamp_millis(),
+                            },
+                        );
+                    }
+                    Event::ContactUpdated(update) => {
+                        emit_event(
+                            &app,
+                            "whatsmo://contact-updated",
+                            ContactUpdatedPayload {
+                                jid: update.jid.to_string(),
+                                timestamp_ms: update.timestamp.timestamp_millis(),
+                            },
+                        );
+                    }
+                    Event::ContactNumberChanged(change) => {
+                        emit_event(
+                            &app,
+                            "whatsmo://contact-number-changed",
+                            ContactNumberChangedPayload {
+                                old_jid: change.old_jid.to_string(),
+                                new_jid: change.new_jid.to_string(),
+                                old_lid: change.old_lid.as_ref().map(ToString::to_string),
+                                new_lid: change.new_lid.as_ref().map(ToString::to_string),
+                                timestamp_ms: change.timestamp.timestamp_millis(),
+                            },
+                        );
+                    }
+                    Event::ContactSyncRequested(sync) => {
+                        emit_event(
+                            &app,
+                            "whatsmo://contact-sync-requested",
+                            ContactSyncRequestedPayload {
+                                after_ms: sync.after.map(|timestamp| timestamp.timestamp_millis()),
+                                timestamp_ms: sync.timestamp.timestamp_millis(),
                             },
                         );
                     }
