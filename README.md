@@ -78,7 +78,7 @@ Legend:
 - [x] Auto-resume saved WhatsApp session on app launch (`resume_saved_session`)
 - [x] Runtime session status command (`get_session_status`)
 - [x] Disconnect local runtime session (`disconnect_session`)
-- [ ] Full WhatsApp unlink/logout flow from the server side
+- [x] Full WhatsApp unlink/logout flow from the server side, plus local session DB cleanup
 - [ ] Account/device details screen showing linked JID, device name, and connection health
 
 ### Chat and messaging
