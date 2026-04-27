@@ -97,7 +97,7 @@ Legend:
 - [ ] Pagination/loading older messages
 - [ ] Real chat search/filtering; the search field is currently visual only
 - [ ] Group metadata sync: subject, participant list, admin state, group avatar
-- [ ] Message delete/revoke/edit handling
+- [x] Message edit and delete/revoke handling for live message events
 - [ ] Quoted replies, reactions, forwarded labels, polls, location, contacts, and stickers
 - [ ] Robust offline queue/retry for outgoing messages
 
