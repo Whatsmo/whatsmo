@@ -124,6 +124,22 @@ pub struct SessionStatusPayload {
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AccountDevicePayload {
+    connected: bool,
+    logged_in: bool,
+    running: bool,
+    device_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    phone_jid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    lid_jid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    push_name: Option<String>,
+    message: String,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct IncomingMessagePayload {
     id: String,
     chat_id: String,
@@ -549,6 +565,66 @@ pub async fn get_session_status(
             "No WhatsApp session running.".to_string()
         } else {
             guard.status_message.clone()
+        },
+    })
+}
+
+#[tauri::command]
+pub async fn get_account_device(
+    state: State<'_, WhatsmoState>,
+) -> CommandResult<AccountDevicePayload> {
+    let (client, running, state_connected, state_message) = {
+        let guard = state.inner.lock().await;
+        (
+            guard.client.clone(),
+            guard.runner.is_some(),
+            guard.connected,
+            guard.status_message.clone(),
+        )
+    };
+
+    let Some(client) = client else {
+        return Ok(AccountDevicePayload {
+            connected: false,
+            logged_in: false,
+            running,
+            device_name: "Whatsmo mobile companion".to_string(),
+            phone_jid: None,
+            lid_jid: None,
+            push_name: None,
+            message: if state_message.is_empty() {
+                "No WhatsApp session running.".to_string()
+            } else {
+                state_message
+            },
+        });
+    };
+
+    let phone_jid = client.get_pn().await.map(|jid| jid.to_string());
+    let lid_jid = client.get_lid().await.map(|jid| jid.to_string());
+    let push_name = match client.get_push_name().await {
+        value if value.trim().is_empty() => None,
+        value => Some(value),
+    };
+    let connected = client.is_connected();
+    let logged_in = client.is_logged_in();
+
+    Ok(AccountDevicePayload {
+        connected,
+        logged_in,
+        running,
+        device_name: "Whatsmo mobile companion".to_string(),
+        phone_jid,
+        lid_jid,
+        push_name,
+        message: if connected && logged_in {
+            "Connected and authenticated with WhatsApp.".to_string()
+        } else if state_connected {
+            "Whatsmo is connected, waiting for account readiness.".to_string()
+        } else if state_message.is_empty() {
+            "WhatsApp session is not connected.".to_string()
+        } else {
+            state_message
         },
     })
 }
