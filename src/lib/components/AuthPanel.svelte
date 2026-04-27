@@ -160,7 +160,7 @@
     display: grid;
     grid-template-columns: auto 1fr;
     gap: 10px;
-    margin: -8px 12px 10px;
+    margin: 0;
     padding: 12px;
     border-radius: 18px;
     color: #0b211a;

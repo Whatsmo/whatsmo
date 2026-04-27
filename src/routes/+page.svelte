@@ -13,6 +13,7 @@
     refreshAccountDevice,
     requestNotifications,
     resumeSession,
+    retryMessage,
     selectedChat,
     selectedMessages,
     selectChat,
@@ -26,7 +27,16 @@
 
   let bridgeCleanup: UnlistenFn | undefined;
   let attachNotice = false;
+  let authModalOpen = false;
   let activeScreen: 'chats' | 'chat' | 'updates' = 'chats';
+
+  $: linkLabel =
+    $appState.auth.mode === 'connected'
+      ? 'Linked'
+      : $appState.auth.mode === 'connecting'
+        ? 'Pairing'
+        : 'Link';
+  $: linkModalTitle = $appState.auth.mode === 'connected' ? 'Linked account' : 'Link this device';
 
   onMount(() => {
     void requestNotifications();
@@ -65,7 +75,17 @@
     selectChat(chatId);
     activeScreen = 'chat';
   }
+
+  function closeAuthModal(): void {
+    authModalOpen = false;
+  }
 </script>
+
+<svelte:window
+  on:keydown={(event) => {
+    if (event.key === 'Escape') closeAuthModal();
+  }}
+/>
 
 <svelte:head>
   <title>Whatsmo · Rust-powered WhatsApp mobile</title>
@@ -83,29 +103,38 @@
         messages={$selectedMessages}
         onBack={() => (activeScreen = 'chats')}
         onSend={sendMessage}
+        onRetry={retryMessage}
         onAttach={showAttachNotice}
       />
     {:else}
       <div class="home-screen">
         <header class="app-header">
           <h1>Whatsmo</h1>
-          <span class:online={$appState.auth.mode === 'connected'} class="connection-dot" aria-label="Connection status"></span>
+          <button
+            class:connected={$appState.auth.mode === 'connected'}
+            class="link-button"
+            aria-haspopup="dialog"
+            aria-expanded={authModalOpen}
+            on:click={() => (authModalOpen = true)}
+          >
+            {linkLabel}
+          </button>
         </header>
 
-        <AuthPanel auth={$appState.auth} account={$appState.account} />
+        <div class="screen-content">
+          {#if $appState.historySync}
+            <section class:active={$appState.historySync.active} class="history-sync-banner" aria-live="polite">
+              <strong>{$appState.historySync.active ? 'Syncing history' : 'History sync'}</strong>
+              <span>{$appState.historySync.message}</span>
+            </section>
+          {/if}
 
-        {#if $appState.historySync}
-          <section class:active={$appState.historySync.active} class="history-sync-banner" aria-live="polite">
-            <strong>{$appState.historySync.active ? 'Syncing history' : 'History sync'}</strong>
-            <span>{$appState.historySync.message}</span>
-          </section>
-        {/if}
-
-        {#if activeScreen === 'chats'}
-          <ChatList chats={$appState.chats} selectedChatId={$appState.selectedChatId} onSelect={openChat} />
-        {:else}
-          <StatusPanel auth={$appState.auth} contacts={$appState.contacts} />
-        {/if}
+          {#if activeScreen === 'chats'}
+            <ChatList chats={$appState.chats} selectedChatId={$appState.selectedChatId} onSelect={openChat} />
+          {:else}
+            <StatusPanel auth={$appState.auth} contacts={$appState.contacts} />
+          {/if}
+        </div>
 
         <nav class="bottom-nav" aria-label="Primary navigation">
           <button class:active={activeScreen === 'chats'} on:click={() => (activeScreen = 'chats')}>
@@ -121,6 +150,25 @@
 
   {#if attachNotice}
     <div class="toast" role="status">Media picker is queued for the next backend slice.</div>
+  {/if}
+
+  {#if authModalOpen}
+    <div class="modal-backdrop">
+      <button class="modal-dismiss" aria-label="Close link dialog" on:click={closeAuthModal}></button>
+      <div
+        class="link-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="link-modal-title"
+        tabindex="-1"
+      >
+        <header class="link-modal__header">
+          <h2 id="link-modal-title">{linkModalTitle}</h2>
+          <button aria-label="Close link dialog" on:click={closeAuthModal}>×</button>
+        </header>
+        <AuthPanel auth={$appState.auth} account={$appState.account} />
+      </div>
+    </div>
   {/if}
 </main>
 
@@ -191,9 +239,22 @@
 
   .home-screen {
     display: grid;
-    grid-template-rows: auto auto 1fr auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
     min-height: 0;
     background: var(--paper);
+  }
+
+  .screen-content {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .screen-content :global(.chat-list),
+  .screen-content :global(.status-panel) {
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   .app-header {
@@ -216,18 +277,22 @@
     letter-spacing: -0.03em;
   }
 
-  .connection-dot {
-    width: 13px;
-    height: 13px;
-    border: 2px solid rgba(255, 255, 255, 0.7);
+  .link-button {
+    min-height: 38px;
+    border: 1px solid rgba(255, 255, 255, 0.28);
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.28);
+    padding: 0 14px;
+    color: white;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 950;
+    background: rgba(255, 255, 255, 0.14);
   }
 
-  .connection-dot.online {
+  .link-button.connected {
+    color: #073b2f;
+    background: #d9fdd3;
     border-color: #d9fdd3;
-    background: #25d366;
-    box-shadow: 0 0 0 5px rgba(37, 211, 102, 0.18);
   }
 
   .bottom-nav {
@@ -267,14 +332,18 @@
     display: grid;
     gap: 2px;
     justify-items: center;
+    align-content: center;
+    min-height: 54px;
+    width: 100%;
     border: 0;
     border-radius: 18px;
-    padding: 8px 6px;
+    padding: 0 6px;
     color: #667781;
     font: inherit;
     font-size: 0.75rem;
     font-weight: 850;
     background: transparent;
+    line-height: 1.1;
   }
 
   .bottom-nav button.active {
@@ -283,7 +352,10 @@
   }
 
   .bottom-nav span {
+    display: block;
+    height: 18px;
     font-size: 1rem;
+    line-height: 18px;
   }
 
   .toast {
@@ -297,6 +369,76 @@
     font-weight: 900;
     background: var(--wa-mint);
     box-shadow: 0 18px 46px rgba(0, 0, 0, 0.2);
+  }
+
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: grid;
+    place-items: end center;
+    padding: max(18px, var(--safe-top)) max(12px, var(--safe-right)) max(18px, var(--safe-bottom)) max(12px, var(--safe-left));
+    background: rgba(0, 0, 0, 0.42);
+    backdrop-filter: blur(8px);
+  }
+
+  .link-modal {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 14px;
+    width: min(100%, 430px);
+    max-height: min(78vh, 720px);
+    overflow-y: auto;
+    border-radius: 30px 30px 26px 26px;
+    padding: 16px;
+    background: var(--paper);
+    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.38);
+    animation: modal-rise 180ms ease-out both;
+  }
+
+  .modal-dismiss {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    padding: 0;
+    background: transparent;
+  }
+
+  .link-modal__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+  }
+
+  .link-modal__header h2 {
+    margin: 0;
+  }
+
+  .link-modal__header h2 {
+    color: var(--ink);
+    font-size: 1.3rem;
+    letter-spacing: -0.03em;
+  }
+
+  .link-modal__header button {
+    width: 40px;
+    height: 40px;
+    border: 0;
+    border-radius: 999px;
+    color: #54645f;
+    font: inherit;
+    font-size: 1.45rem;
+    font-weight: 700;
+    background: #eef2ee;
+  }
+
+  @keyframes modal-rise {
+    from {
+      opacity: 0;
+      transform: translateY(18px) scale(0.98);
+    }
   }
 
   @media (max-width: 520px) {
@@ -314,6 +456,18 @@
 
     .bottom-nav {
       padding-bottom: max(12px, calc(8px + var(--safe-bottom)));
+    }
+
+    .modal-backdrop {
+      place-items: end stretch;
+      padding: 0;
+    }
+
+    .link-modal {
+      width: 100%;
+      max-height: 86vh;
+      border-radius: 28px 28px 0 0;
+      padding-bottom: max(16px, calc(16px + var(--safe-bottom)));
     }
   }
 </style>
