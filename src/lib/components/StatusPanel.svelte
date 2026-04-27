@@ -59,6 +59,7 @@
   let busy = false;
   let lastPost: StatusPostPayload | null = null;
   let errorMessage = '';
+  let isComposing = false;
 
   $: userContacts = contacts.filter((contact) => contact.id.includes('@s.whatsapp.net'));
   $: canUseStatusRecipients = mode !== 'react';
@@ -185,13 +186,74 @@
 </script>
 
 <section class="status-panel" aria-label="Status updates">
-  <div class="status-panel__intro">
-    <span>Updates</span>
-    <h2>Status tools</h2>
-    <p>Post text, image, video, raw statuses, revoke your own statuses, or react to someone else's status.</p>
+  <div class="status-header">
+    <h2>Status</h2>
+    <div class="status-actions">
+      <button class="icon-btn"><span class="material-symbols-rounded">more_vert</span></button>
+    </div>
   </div>
 
-  <div class="mode-tabs" aria-label="Status mode">
+  <div class="status-row">
+    <button class="status-item my-status" type="button" on:click={() => (isComposing = true)}>
+      <div class="avatar-wrapper">
+        <div class="avatar my-avatar">
+          <span class="material-symbols-rounded">person</span>
+        </div>
+        <div class="add-badge">
+          <span class="material-symbols-rounded" style="font-size: 14px;">add</span>
+        </div>
+      </div>
+      <span class="status-name">My status</span>
+    </button>
+    
+    {#each userContacts.slice(0, 5) as contact (contact.id)}
+      <div class="status-item">
+        <div class="avatar-wrapper">
+          <div class="avatar contact-avatar" style={`background: ${contact.avatarGradient}`}>
+            {#if contact.avatarUrl}
+              <img src={contact.avatarUrl} alt="" loading="lazy" referrerpolicy="no-referrer" />
+            {:else}
+              {contact.name.slice(0, 1)}
+            {/if}
+          </div>
+          <svg class="status-ring" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="48" fill="none" stroke="var(--wa-green, #008069)" stroke-width="4" stroke-dasharray="80 20" stroke-linecap="round" />
+          </svg>
+        </div>
+        <span class="status-name">{contact.name.split(' ')[0]}</span>
+      </div>
+    {/each}
+  </div>
+
+  <hr class="divider" />
+  
+  <div class="recent-updates">
+    <h3>Recent updates</h3>
+    <p class="muted-text">No recent updates right now.</p>
+  </div>
+
+  <div class="fab-container">
+    <button class="fab small" on:click={() => { mode = 'text'; isComposing = true; }} aria-label="Text status">
+      <span class="material-symbols-rounded">edit</span>
+    </button>
+    <button class="fab" on:click={() => { mode = 'image'; isComposing = true; }} aria-label="Media status">
+      <span class="material-symbols-rounded">camera_alt</span>
+    </button>
+  </div>
+</section>
+
+{#if isComposing}
+  <div class="compose-modal">
+    <header class="compose-header">
+      <button class="icon-btn" on:click={() => (isComposing = false)}>
+        <span class="material-symbols-rounded">arrow_back</span>
+      </button>
+      <h2>{mode === 'text' ? 'Type a status' : mode === 'image' || mode === 'video' ? 'Send media' : 'Status Tool'}</h2>
+      <div style="width: 40px"></div>
+    </header>
+
+    <div class="compose-body">
+      <div class="mode-tabs" aria-label="Status mode">
     {#each modes as item}
       <button class:active={mode === item.value} on:click={() => (mode = item.value)}>{item.label}</button>
     {/each}
@@ -330,32 +392,256 @@
     <p class="success">Done. ID: {lastPost.id}</p>
   {/if}
 
-  {#if errorMessage}
-    <p class="error">{errorMessage}</p>
-  {/if}
-</section>
+    {#if errorMessage}
+      <p class="error">{errorMessage}</p>
+    {/if}
+    </div>
+  </div>
+{/if}
 
 <style>
   .status-panel {
-    display: grid;
-    align-content: start;
-    gap: 14px;
-    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    height: 100%;
     overflow-y: auto;
-    padding: 0 14px 16px;
+    padding: 16px;
+    background: var(--paper, #fbfbf6);
+    position: relative;
+  }
+
+  .status-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .status-header h2 {
+    color: var(--ink, #101f1b);
+    font-size: 1.3rem;
+    font-weight: 700;
+  }
+
+  .icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--muted, #667781);
+    cursor: pointer;
+  }
+
+  .status-row {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    margin-left: -4px;
+    padding-left: 4px;
+  }
+
+  .status-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 68px;
+    border: 0;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    text-align: center;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .avatar-wrapper {
+    position: relative;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.3rem;
+    font-weight: 600;
+    z-index: 1;
+    overflow: hidden;
+  }
+
+  .avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .my-avatar {
+    background: #cfd9df;
+    color: #667781;
+  }
+
+  .contact-avatar {
+    border: 2px solid var(--paper, #fbfbf6);
+  }
+
+  .add-badge {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 22px;
+    height: 22px;
+    background: var(--wa-green, #008069);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    border: 2px solid var(--paper, #fbfbf6);
+    z-index: 2;
+  }
+
+  .status-ring {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+  }
+
+  .status-name {
+    font-size: 0.8rem;
+    color: var(--ink, #101f1b);
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+  }
+
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border-color, #edf0eb);
+    margin: 8px 0;
+  }
+
+  .recent-updates {
+    padding: 8px 0;
+  }
+
+  .recent-updates h3 {
+    font-size: 0.95rem;
+    color: var(--muted, #667781);
+    margin: 0 0 12px 0;
+  }
+
+  .muted-text {
+    color: var(--muted, #667781);
+    font-size: 0.9rem;
+  }
+
+  .fab-container {
+    position: absolute;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    align-items: center;
+    z-index: 10;
+  }
+
+  .fab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 16px; /* Material 3 square-rounded */
+    border: none;
+    color: white;
+    background: var(--wa-green, #008069);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .fab.small {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: var(--nav-active, #e7f6ef);
+    color: var(--ink, #101f1b);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  .fab:active {
+    transform: scale(0.95);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Modal overlay styles */
+  .compose-modal {
+    position: absolute;
+    inset: 0;
+    z-index: 100;
+    background: var(--paper, #fbfbf6);
+    display: flex;
+    flex-direction: column;
+    animation: slideInRight 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  @keyframes slideInRight {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+
+  .compose-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: calc(14px + var(--safe-top, 0px)) 14px 14px;
+    background: var(--wa-green, #008069);
+    color: white;
+  }
+
+  .compose-header h2 {
+    color: white;
+    font-size: 1.15rem;
+    font-weight: 700;
+  }
+
+  .compose-header .icon-btn {
+    color: white;
+    padding: 8px;
+    border-radius: 50%;
+  }
+
+  .compose-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
     background: var(--paper, #fbfbf6);
   }
 
-  .status-panel__intro,
   .recipient-card {
     display: grid;
     gap: 8px;
-  }
-
-  .status-panel__intro span {
-    color: var(--wa-green, #008069);
-    font-size: 0.75rem;
-    font-weight: 900;
   }
 
   h2,
@@ -368,12 +654,11 @@
     font-size: 1.22rem;
   }
 
-  .status-panel__intro p,
   small,
   .success,
   .unsupported,
   .error {
-    color: #667781;
+    color: var(--muted, #667781);
     font-size: 0.82rem;
     line-height: 1.42;
   }
@@ -392,27 +677,32 @@
   .contacts button,
   .secondary {
     flex: 0 0 auto;
-    border: 0;
-    border-radius: 999px;
-    padding: 9px 12px;
-    color: #54645f;
+    border: 1px solid var(--border-color, #e2e7e3);
+    border-radius: 20px;
+    padding: 8px 16px;
+    color: var(--ink, #54645f);
     font: inherit;
-    font-size: 0.8rem;
-    font-weight: 850;
-    background: #f0f2f1;
+    font-size: 0.9rem;
+    font-weight: 600;
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
   }
 
   .mode-tabs button.active,
   .font-row button.active,
   .contacts button.active {
-    color: #0b211a;
-    background: #d9fdd3;
+    color: white;
+    background: var(--wa-green-dark, #075e54);
+    border-color: var(--wa-green-dark, #075e54);
   }
 
   .recipient-card {
-    padding: 12px;
-    border-radius: 20px;
-    background: white;
+    padding: 16px;
+    border-radius: 16px;
+    border: 1px solid var(--border-color, #edf0eb);
+    background: transparent;
+    margin-bottom: 8px;
   }
 
   .contacts button {
@@ -464,53 +754,74 @@
   input,
   select {
     width: 100%;
-    border: 1px solid #e2e7e3;
-    border-radius: 18px;
+    border: 1px solid var(--border-color, #e2e7e3);
+    border-radius: 12px;
     color: var(--ink, #101f1b);
     font: inherit;
     outline: none;
-    background: white;
+    background: transparent;
+    padding: 12px;
+    transition: border-color 0.2s ease;
+  }
+
+  textarea:focus,
+  input:focus,
+  select:focus {
+    border-color: var(--wa-green, #008069);
   }
 
   textarea {
     min-height: 92px;
     resize: vertical;
-    padding: 13px;
   }
 
   input,
   select {
     min-height: 46px;
-    padding: 0 13px;
   }
 
   .swatches button {
-    width: 38px;
-    height: 38px;
-    border: 3px solid transparent;
-    border-radius: 999px;
+    width: 40px;
+    height: 40px;
+    border: 2px solid transparent;
+    border-radius: 50%;
     flex: 0 0 auto;
+    cursor: pointer;
+    transition: transform 0.1s ease;
+  }
+
+  .swatches button:hover {
+    transform: scale(1.05);
   }
 
   .swatches button.active {
-    border-color: #25d366;
-    box-shadow: 0 0 0 2px white inset;
+    border-color: var(--wa-green, #008069);
+    box-shadow: 0 0 0 3px var(--paper, white) inset;
   }
 
   .post-button {
-    min-height: 48px;
+    min-height: 52px;
     border: 0;
-    border-radius: 999px;
+    border-radius: 26px;
     color: white;
     font: inherit;
-    font-weight: 950;
+    font-size: 1.05rem;
+    font-weight: 600;
     background: var(--wa-green, #008069);
+    cursor: pointer;
+    transition: background 0.2s ease, opacity 0.2s ease;
+    margin-top: 16px;
+  }
+
+  .post-button:hover:not(:disabled) {
+    opacity: 0.9;
   }
 
   button:disabled,
   .post-button:disabled {
-    color: #667781;
-    background: #e7ece8;
+    color: var(--muted, #667781);
+    background: var(--border-color, #e7ece8);
+    cursor: not-allowed;
   }
 
   .success {
