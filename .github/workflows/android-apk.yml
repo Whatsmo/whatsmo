@@ -1,0 +1,85 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-apk:
+    name: Android release-test APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Cache Android SDK and build caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            .local/android-sdk
+            .local/cargo
+            .local/gradle
+            .local/keystores
+            src-tauri/target
+          key: android-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock', 'bun.lock', 'package.json') }}
+          restore-keys: |
+            android-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Set up project-local Android SDK
+        run: scripts/setup-android-sdk.sh
+
+      - name: Check frontend
+        run: bun run check
+
+      - name: Check Rust backend
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+
+      - name: Build signed release-test APK
+        run: scripts/build-release-test-apk.sh
+
+      - name: Print APK size
+        run: |
+          ls -lh src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-test.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: whatsmo-release-test-apk
+          path: src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-test.apk
+          if-no-files-found: error
+          retention-days: 14
