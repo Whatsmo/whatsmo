@@ -43,15 +43,17 @@
     padding: 7px 8px 5px;
     border-radius: 8px 8px 8px 2px;
     color: var(--ink, #101f1b);
-    background: white;
+    background: var(--message-in, white);
     box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
     animation: rise 160ms ease both;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
   }
 
   .bubble.mine {
     justify-self: end;
     border-radius: 8px 8px 2px;
-    background: #d9fdd3;
+    background: var(--message-out, #d9fdd3);
   }
 
   p {

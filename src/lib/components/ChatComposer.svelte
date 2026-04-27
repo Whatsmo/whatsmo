@@ -20,51 +20,76 @@
 </script>
 
 <form class="composer" on:submit|preventDefault={submit}>
-  <button type="button" class="ghost" aria-label="Attach media" on:click={() => dispatch('attach')}>＋</button>
-  <input bind:value={draft} placeholder="Message" aria-label="Message" />
-  <button type="submit" class="send" aria-label="Send message">›</button>
+  <div class="input-wrapper">
+    <button type="button" class="ghost" aria-label="Attach media" on:click={() => dispatch('attach')}>
+      <span class="material-symbols-rounded">add</span>
+    </button>
+    <input bind:value={draft} placeholder="Message" aria-label="Message" />
+  </div>
+  <button type="submit" class="send" aria-label="Send message">
+    <span class="material-symbols-rounded">send</span>
+  </button>
 </form>
 
 <style>
   .composer {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
+    display: flex;
+    align-items: center;
     gap: 8px;
     padding: 8px;
-    background: rgba(239, 231, 221, 0.96);
+    background: transparent;
+  }
+
+  .input-wrapper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    background: var(--message-in, white);
+    border-radius: 24px;
+    padding: 4px;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.05);
   }
 
   button,
   input {
-    min-height: 48px;
     border: 0;
-    border-radius: 999px;
     font: inherit;
+    outline: none;
   }
 
   input {
-    min-width: 0;
-    padding: 0 15px;
+    flex: 1;
+    min-height: 40px;
+    padding: 0 12px;
     color: var(--ink, #101f1b);
-    outline: none;
-    background: white;
+    background: transparent;
+    font-size: 1rem;
   }
 
   button {
     cursor: pointer;
-    font-weight: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .ghost {
-    width: 48px;
-    color: #54645f;
-    background: white;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    color: var(--muted, #8696a0);
+    background: transparent;
+    font-size: 1.5rem;
   }
 
   .send {
     width: 48px;
-    color: #f7fff6;
-    font-size: 1.6rem;
+    height: 48px;
+    border-radius: 50%;
+    color: white;
+    font-size: 1.4rem;
     background: var(--wa-green, #008069);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    flex-shrink: 0;
   }
 </style>
