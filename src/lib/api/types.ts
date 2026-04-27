@@ -87,6 +87,25 @@ export interface IncomingMessagePayload {
   fromMe: boolean;
 }
 
+export interface HistorySyncPayload {
+  chatId: string;
+  title: string;
+  unreadCount: number;
+  lastMessageAt: number;
+  isGroup: boolean;
+  messages: IncomingMessagePayload[];
+}
+
+export interface HistorySyncProgressPayload {
+  active: boolean;
+  total: number;
+  processed: number;
+  messages: number;
+  notifications: number;
+  receipts: number;
+  message: string;
+}
+
 export interface OutgoingMessagePayload {
   id: string;
   chatId: string;
@@ -124,6 +143,7 @@ export interface ReceiptPayload {
 export interface AppModel {
   auth: AuthPayload;
   account: AccountDevicePayload | null;
+  historySync: HistorySyncProgressPayload | null;
   chats: ChatSummary[];
   messages: Record<string, ChatMessage[]>;
   contacts: ContactProfile[];

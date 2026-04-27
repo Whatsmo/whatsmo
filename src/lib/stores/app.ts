@@ -8,6 +8,8 @@ import type {
   ConnectionPayload,
   ContactProfile,
   ContactLookupPayload,
+  HistorySyncPayload,
+  HistorySyncProgressPayload,
   IncomingMessagePayload,
   ReceiptPayload,
   SessionStatusPayload,
@@ -361,6 +363,46 @@ export function ingestIncomingMessage(payload: IncomingMessagePayload): void {
   }
 }
 
+export function ingestHistorySync(payload: HistorySyncPayload): void {
+  const historyMessages = payload.messages.map(messageFromIncomingPayload);
+
+  appState.update((state) => {
+    const existingMessages = state.messages[payload.chatId] ?? [];
+    const mergedMessages = mergeMessages(existingMessages, historyMessages);
+    const existingChat = state.chats.find((chat) => chat.id === payload.chatId);
+    const lastMessage = mergedMessages.at(-1);
+    const syncedChat: ChatSummary = {
+      id: payload.chatId,
+      kind: payload.isGroup ? 'group' : 'direct',
+      title: existingChat?.title ?? payload.title,
+      subtitle: lastMessage?.text ?? existingChat?.subtitle ?? 'Synced from WhatsApp history',
+      unreadCount: existingChat?.unreadCount ?? payload.unreadCount,
+      muted: existingChat?.muted ?? false,
+      pinned: existingChat?.pinned ?? false,
+      avatarGradient: existingChat?.avatarGradient ?? gradientFromId(payload.chatId),
+      lastMessageAt: lastMessage?.timestamp ?? payload.lastMessageAt,
+      participantCount: existingChat?.participantCount
+    };
+    const chats = existingChat
+      ? state.chats.map((chat) => (chat.id === payload.chatId ? syncedChat : chat))
+      : [syncedChat, ...state.chats];
+
+    return {
+      ...state,
+      selectedChatId: state.selectedChatId || payload.chatId,
+      chats: sortChats(chats),
+      messages: {
+        ...state.messages,
+        [payload.chatId]: mergedMessages
+      }
+    };
+  });
+}
+
+export function setHistoryProgress(payload: HistorySyncProgressPayload): void {
+  appState.update((state) => ({ ...state, historySync: payload }));
+}
+
 export function setTyping(payload: TypingPayload): void {
   appState.update((state) => ({
     ...state,
@@ -418,13 +460,42 @@ function appendMessage(message: ChatMessage): void {
       ...state,
       contacts,
       selectedChatId: state.selectedChatId || message.chatId,
-      chats: chats.sort((left, right) => Number(right.pinned) - Number(left.pinned) || right.lastMessageAt - left.lastMessageAt),
+      chats: sortChats(chats),
       messages: {
         ...state.messages,
         [message.chatId]: [...existingMessages, message].slice(-MAX_PERSISTED_MESSAGES_PER_CHAT)
       }
     };
   });
+}
+
+function messageFromIncomingPayload(payload: IncomingMessagePayload): ChatMessage {
+  return {
+    id: payload.id,
+    chatId: payload.chatId,
+    senderId: payload.senderId,
+    text: payload.text,
+    timestamp: payload.timestampMs,
+    fromMe: payload.fromMe,
+    status: payload.fromMe ? 'sent' : 'delivered'
+  };
+}
+
+function mergeMessages(existing: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
+  const byId = new Map(existing.map((message) => [message.id, message]));
+  for (const message of incoming) {
+    byId.set(message.id, { ...byId.get(message.id), ...message });
+  }
+
+  return Array.from(byId.values())
+    .sort((left, right) => left.timestamp - right.timestamp)
+    .slice(-MAX_PERSISTED_MESSAGES_PER_CHAT);
+}
+
+function sortChats(chats: ChatSummary[]): ChatSummary[] {
+  return [...chats].sort(
+    (left, right) => Number(right.pinned) - Number(left.pinned) || right.lastMessageAt - left.lastMessageAt
+  );
 }
 
 function markMessageStatus(chatId: string, localId: string, status: ChatMessage['status'], sentId?: string): void {
@@ -448,6 +519,7 @@ function createInitialState(): AppModel {
         message: 'Restoring saved WhatsApp session...'
       },
       account: null,
+      historySync: null,
       chats: persisted.chats,
       messages: persisted.messages,
       contacts: persisted.contacts,
@@ -464,6 +536,7 @@ function createInitialState(): AppModel {
       message: 'Pair this companion client with QR code or phone number code.'
     },
     account: null,
+    historySync: null,
     chats: shouldSeedPreview ? chats : [],
     messages: shouldSeedPreview ? messages : {},
     contacts: shouldSeedPreview ? contacts : [],

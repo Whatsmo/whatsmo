@@ -8,6 +8,7 @@
   import { connectBridge } from '$lib/api/whatsmo';
   import {
     appState,
+    ingestHistorySync,
     ingestIncomingMessage,
     refreshAccountDevice,
     requestNotifications,
@@ -18,6 +19,7 @@
     sendMessage,
     setAuth,
     setConnection,
+    setHistoryProgress,
     setReceipt,
     setTyping
   } from '$lib/stores/app';
@@ -38,6 +40,8 @@
         if (payload.connected) void refreshAccountDevice();
       },
       onMessage: ingestIncomingMessage,
+      onHistorySync: ingestHistorySync,
+      onHistoryProgress: setHistoryProgress,
       onTyping: setTyping,
       onReceipt: setReceipt
     }).then((cleanup) => {
@@ -89,6 +93,13 @@
         </header>
 
         <AuthPanel auth={$appState.auth} account={$appState.account} />
+
+        {#if $appState.historySync}
+          <section class:active={$appState.historySync.active} class="history-sync-banner" aria-live="polite">
+            <strong>{$appState.historySync.active ? 'Syncing history' : 'History sync'}</strong>
+            <span>{$appState.historySync.message}</span>
+          </section>
+        {/if}
 
         {#if activeScreen === 'chats'}
           <ChatList chats={$appState.chats} selectedChatId={$appState.selectedChatId} onSelect={openChat} />
@@ -226,6 +237,30 @@
     padding: 8px 12px 12px;
     border-top: 1px solid #edf0eb;
     background: rgba(251, 251, 246, 0.96);
+  }
+
+  .history-sync-banner {
+    display: grid;
+    gap: 3px;
+    margin: -2px 12px 10px;
+    padding: 10px 12px;
+    border-radius: 16px;
+    color: #075e54;
+    background: #eef7f3;
+  }
+
+  .history-sync-banner.active {
+    background: #d9fdd3;
+  }
+
+  .history-sync-banner strong {
+    font-size: 0.82rem;
+  }
+
+  .history-sync-banner span {
+    color: #4d5e58;
+    font-size: 0.76rem;
+    line-height: 1.35;
   }
 
   .bottom-nav button {

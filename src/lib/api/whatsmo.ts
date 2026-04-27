@@ -10,6 +10,8 @@ import type {
   AccountDevicePayload,
   ConnectionPayload,
   ContactLookupPayload,
+  HistorySyncPayload,
+  HistorySyncProgressPayload,
   IncomingMessagePayload,
   OutgoingMessagePayload,
   ReceiptPayload,
@@ -262,6 +264,8 @@ export interface BridgeHandlers {
   onAuth: (payload: AuthPayload) => void;
   onConnection: (payload: ConnectionPayload) => void;
   onMessage: (payload: IncomingMessagePayload) => void;
+  onHistorySync: (payload: HistorySyncPayload) => void;
+  onHistoryProgress: (payload: HistorySyncProgressPayload) => void;
   onTyping: (payload: TypingPayload) => void;
   onReceipt: (payload: ReceiptPayload) => void;
 }
@@ -275,6 +279,8 @@ export async function connectBridge(handlers: BridgeHandlers): Promise<UnlistenF
     listen<AuthPayload>('whatsmo://auth', (event) => handlers.onAuth(event.payload)),
     listen<ConnectionPayload>('whatsmo://connection', (event) => handlers.onConnection(event.payload)),
     listen<IncomingMessagePayload>('whatsmo://message', (event) => handlers.onMessage(event.payload)),
+    listen<HistorySyncPayload>('whatsmo://history-sync', (event) => handlers.onHistorySync(event.payload)),
+    listen<HistorySyncProgressPayload>('whatsmo://history-progress', (event) => handlers.onHistoryProgress(event.payload)),
     listen<TypingPayload>('whatsmo://typing', (event) => handlers.onTyping(event.payload)),
     listen<ReceiptPayload>('whatsmo://receipt', (event) => handlers.onReceipt(event.payload))
   ]);
