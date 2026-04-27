@@ -110,9 +110,9 @@ Legend:
 - [x] Profile picture URL retrieval and local WebView caching for synced contacts/groups
 - [x] Auto-sync contact profiles from incoming and history-synced message JIDs
 - [ ] Full address-book/contact import from the Android device
-- [ ] Automatic contact sync requested by WhatsApp contact events
+- [x] Automatic contact refresh from WhatsApp contact/profile update events
 - [ ] Rich contact profile screen with business/status/about fields from WhatsApp
-- [ ] Contact number-change migration handling
+- [x] Contact number-change migration handling for chats, messages, selected chat, and contacts
 
 ### Status / Updates
 
@@ -132,12 +132,12 @@ Legend:
 
 ### Media and files
 
-- [ ] Chat image/video/document upload and send
+- [x] Chat image/video/document upload and send through `client.upload(...)` + `client.send_message(...)`
 - [ ] Incoming media download/decryption and local cache
 - [ ] Media preview grid for chats and profiles
-- [ ] Android file picker integration for chat attachments
+- [x] Android/WebView file picker integration for chat attachments
 - [ ] Thumbnail generation pipeline for images/videos
-- [ ] File size/type validation before upload
+- [x] File size/type validation before upload
 
 ### Notifications and background behavior
 
