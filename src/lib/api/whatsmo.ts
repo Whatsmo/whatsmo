@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
   isPermissionGranted,
+  onAction,
   requestPermission,
   sendNotification
 } from '@tauri-apps/plugin-notification';
@@ -137,7 +138,9 @@ export async function sendMediaMessage(
   mimeType: string,
   fileName: string,
   caption?: string,
-  durationSeconds?: number
+  durationSeconds?: number,
+  viewOnce?: boolean,
+  ptt?: boolean
 ): Promise<OutgoingMediaPayload> {
   if (!isTauriRuntime()) {
     return {
@@ -157,7 +160,9 @@ export async function sendMediaMessage(
     mimeType,
     fileName,
     caption,
-    durationSeconds
+    durationSeconds,
+    viewOnce,
+    ptt
   });
 }
 
@@ -358,12 +363,34 @@ export async function enableNotifications(): Promise<boolean> {
   return permission === 'granted';
 }
 
-export function notifyNewMessage(title: string, body: string): void {
+export function notifyNewMessage(title: string, body: string, chatId: string): void {
   if (!isTauriRuntime()) {
     return;
   }
 
-  sendNotification({ title, body });
+  sendNotification({
+    title,
+    body,
+    extra: { chatId },
+    group: chatId
+  });
+}
+
+export async function connectNotificationActions(onOpenChat: (chatId: string) => void): Promise<UnlistenFn> {
+  if (!isTauriRuntime()) {
+    return () => undefined;
+  }
+
+  const listener = await onAction((notification) => {
+    const chatId = notification.extra?.chatId;
+    if (typeof chatId === 'string' && chatId.length > 0) {
+      onOpenChat(chatId);
+    }
+  });
+
+  return () => {
+    void listener.unregister();
+  };
 }
 
 export interface BridgeHandlers {

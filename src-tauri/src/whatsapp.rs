@@ -145,6 +145,8 @@ pub struct IncomingMessagePayload {
     chat_id: String,
     sender_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    sender_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     text: Option<String>,
     timestamp_ms: i64,
     is_group: bool,
@@ -176,6 +178,10 @@ pub struct MediaAttachmentPayload {
     file_length: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     thumbnail: Option<Vec<u8>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    view_once: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ptt: Option<bool>,
 }
 
 #[derive(Clone, Serialize)]
@@ -300,6 +306,8 @@ pub struct ContactProfilePayload {
 #[serde(rename_all = "camelCase")]
 pub struct ContactUpdatedPayload {
     jid: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    push_name: Option<String>,
     timestamp_ms: i64,
 }
 
@@ -460,6 +468,8 @@ pub async fn send_media_message(
     file_name: String,
     caption: Option<String>,
     duration_seconds: Option<u32>,
+    view_once: Option<bool>,
+    ptt: Option<bool>,
 ) -> CommandResult<OutgoingMediaPayload> {
     const MAX_MEDIA_BYTES: usize = 64 * 1024 * 1024;
 
@@ -477,7 +487,9 @@ pub async fn send_media_message(
     let media_type = match kind.as_str() {
         "image" => MediaType::Image,
         "video" => MediaType::Video,
+        "audio" => MediaType::Audio,
         "document" => MediaType::Document,
+        "sticker" => MediaType::Sticker,
         other => return Err(format!("Unsupported attachment kind: {other}")),
     };
     let upload = client
@@ -511,6 +523,7 @@ pub async fn send_media_message(
                 file_length: Some(upload.file_length),
                 mimetype: Some(clean_mime.clone()),
                 caption: clean_caption.clone(),
+                view_once,
                 ..Default::default()
             })),
             ..Default::default()
@@ -526,6 +539,23 @@ pub async fn send_media_message(
                 mimetype: Some(clean_mime.clone()),
                 caption: clean_caption.clone(),
                 seconds: duration_seconds,
+                view_once,
+                jpeg_thumbnail: None,
+                ..Default::default()
+            })),
+            ..Default::default()
+        },
+        "audio" => wa::Message {
+            audio_message: Some(Box::new(wa::message::AudioMessage {
+                url: Some(upload.url),
+                direct_path: Some(upload.direct_path),
+                media_key: Some(upload.media_key),
+                file_enc_sha256: Some(upload.file_enc_sha256),
+                file_sha256: Some(upload.file_sha256),
+                file_length: Some(upload.file_length),
+                mimetype: Some(clean_mime.clone()),
+                seconds: duration_seconds,
+                ptt,
                 ..Default::default()
             })),
             ..Default::default()
@@ -542,6 +572,19 @@ pub async fn send_media_message(
                 title: Some(clean_name.clone()),
                 file_name: Some(clean_name.clone()),
                 caption: clean_caption.clone(),
+                ..Default::default()
+            })),
+            ..Default::default()
+        },
+        "sticker" => wa::Message {
+            sticker_message: Some(Box::new(wa::message::StickerMessage {
+                url: Some(upload.url),
+                direct_path: Some(upload.direct_path),
+                media_key: Some(upload.media_key),
+                file_enc_sha256: Some(upload.file_enc_sha256),
+                file_sha256: Some(upload.file_sha256),
+                file_length: Some(upload.file_length),
+                mimetype: Some(clean_mime.clone()),
                 ..Default::default()
             })),
             ..Default::default()
@@ -583,7 +626,9 @@ pub async fn download_media_attachment(
     let media_type = match kind.as_str() {
         "image" => MediaType::Image,
         "video" => MediaType::Video,
+        "audio" => MediaType::Audio,
         "document" => MediaType::Document,
+        "sticker" => MediaType::Sticker,
         other => return Err(format!("Unsupported attachment kind: {other}")),
     };
     let client = connected_client(&state).await?;
@@ -1263,7 +1308,12 @@ async fn start_session(
                         let payload = IncomingMessagePayload {
                             id: info.id.to_string(),
                             chat_id: chat_id.clone(),
-                            sender_id: info.source.sender.to_string(),
+                            sender_id: preferred_sender_jid(
+                                &info.source.sender,
+                                info.source.sender_alt.as_ref(),
+                            )
+                            .to_string(),
+                            sender_name: non_empty_string(&info.push_name),
                             text: message.text_content().map(ToString::to_string),
                             timestamp_ms: info.timestamp.timestamp_millis(),
                             is_group: info.source.is_group,
@@ -1351,6 +1401,7 @@ async fn start_session(
                             "whatsmo://contact-updated",
                             ContactUpdatedPayload {
                                 jid: update.jid.to_string(),
+                                push_name: None,
                                 timestamp_ms: update.timestamp.timestamp_millis(),
                             },
                         );
@@ -1361,6 +1412,7 @@ async fn start_session(
                             "whatsmo://contact-updated",
                             ContactUpdatedPayload {
                                 jid: update.jid.to_string(),
+                                push_name: None,
                                 timestamp_ms: update.timestamp.timestamp_millis(),
                             },
                         );
@@ -1371,6 +1423,7 @@ async fn start_session(
                             "whatsmo://contact-updated",
                             ContactUpdatedPayload {
                                 jid: update.jid.to_string(),
+                                push_name: non_empty_string(&update.new_push_name),
                                 timestamp_ms: update.message.timestamp.timestamp_millis(),
                             },
                         );
@@ -1381,6 +1434,7 @@ async fn start_session(
                             "whatsmo://contact-updated",
                             ContactUpdatedPayload {
                                 jid: update.jid.to_string(),
+                                push_name: None,
                                 timestamp_ms: update.timestamp.timestamp_millis(),
                             },
                         );
@@ -1616,6 +1670,7 @@ fn history_message_payload(
         id: id.clone(),
         chat_id,
         sender_id,
+        sender_name: non_empty_option_string(web_message.push_name.as_deref()),
         text,
         timestamp_ms: web_message
             .message_timestamp
@@ -1627,6 +1682,29 @@ fn history_message_payload(
         target_message_id: None,
         media: media_attachment_payload(&id, message),
     })
+}
+
+fn non_empty_string(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+fn non_empty_option_string(value: Option<&str>) -> Option<String> {
+    value.and_then(non_empty_string)
+}
+
+fn preferred_sender_jid<'a>(sender: &'a Jid, sender_alt: Option<&'a Jid>) -> &'a Jid {
+    if sender.is_pn() {
+        sender
+    } else if let Some(alt) = sender_alt.filter(|jid| jid.is_pn()) {
+        alt
+    } else {
+        sender
+    }
 }
 
 fn media_attachment_payload(
@@ -1651,6 +1729,8 @@ fn media_attachment_payload(
             file_enc_sha256: image.file_enc_sha256.clone(),
             file_length: image.file_length,
             thumbnail: image.jpeg_thumbnail.clone(),
+            view_once: image.view_once,
+            ptt: None,
         });
     }
 
@@ -1671,6 +1751,8 @@ fn media_attachment_payload(
             file_enc_sha256: video.file_enc_sha256.clone(),
             file_length: video.file_length,
             thumbnail: video.jpeg_thumbnail.clone(),
+            view_once: video.view_once,
+            ptt: None,
         });
     }
 
@@ -1690,6 +1772,46 @@ fn media_attachment_payload(
             file_enc_sha256: document.file_enc_sha256.clone(),
             file_length: document.file_length,
             thumbnail: document.jpeg_thumbnail.clone(),
+            view_once: None,
+            ptt: None,
+        });
+    }
+
+    if let Some(audio) = &base.audio_message {
+        return Some(MediaAttachmentPayload {
+            id: format!("{message_id}:audio"),
+            kind: "audio".to_string(),
+            name: if audio.ptt.unwrap_or(false) {
+                "Voice message".to_string()
+            } else {
+                "Audio".to_string()
+            },
+            mime_type: audio.mimetype.clone(),
+            direct_path: audio.direct_path.clone(),
+            media_key: audio.media_key.clone(),
+            file_sha256: audio.file_sha256.clone(),
+            file_enc_sha256: audio.file_enc_sha256.clone(),
+            file_length: audio.file_length,
+            thumbnail: None,
+            view_once: audio.view_once,
+            ptt: audio.ptt,
+        });
+    }
+
+    if let Some(sticker) = &base.sticker_message {
+        return Some(MediaAttachmentPayload {
+            id: format!("{message_id}:sticker"),
+            kind: "sticker".to_string(),
+            name: "Sticker".to_string(),
+            mime_type: sticker.mimetype.clone(),
+            direct_path: sticker.direct_path.clone(),
+            media_key: sticker.media_key.clone(),
+            file_sha256: sticker.file_sha256.clone(),
+            file_enc_sha256: sticker.file_enc_sha256.clone(),
+            file_length: sticker.file_length,
+            thumbnail: sticker.png_thumbnail.clone(),
+            view_once: None,
+            ptt: None,
         });
     }
 

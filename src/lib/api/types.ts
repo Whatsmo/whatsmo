@@ -32,7 +32,7 @@ export interface AccountDevicePayload {
 
 export type ChatKind = 'direct' | 'group';
 export type MessageStatus = 'queued' | 'sent' | 'delivered' | 'read' | 'played' | 'failed';
-export type MediaKind = 'image' | 'video' | 'document' | 'audio';
+export type MediaKind = 'image' | 'video' | 'document' | 'audio' | 'sticker';
 export type MessageEventKind = 'message' | 'edit' | 'revoke' | 'admin-revoke' | 'other';
 export type StatusPrivacy = 'contacts' | 'allowlist' | 'denylist';
 
@@ -64,12 +64,15 @@ export interface MediaAttachment {
   fileEncSha256?: number[];
   fileLength?: number;
   thumbnail?: number[];
+  viewOnce?: boolean;
+  ptt?: boolean;
 }
 
 export interface ChatMessage {
   id: string;
   chatId: string;
   senderId: string;
+  senderName?: string;
   text?: string;
   timestamp: number;
   fromMe: boolean;
@@ -87,6 +90,7 @@ export interface ChatSummary {
   unreadCount: number;
   muted: boolean;
   pinned: boolean;
+  archived?: boolean;
   avatarGradient: string;
   avatarUrl?: string;
   lastMessageAt: number;
@@ -122,6 +126,7 @@ export interface IncomingMessagePayload {
   id: string;
   chatId: string;
   senderId: string;
+  senderName?: string;
   text?: string;
   timestampMs: number;
   isGroup: boolean;
@@ -202,6 +207,7 @@ export interface ContactProfilePayload {
 
 export interface ContactUpdatedPayload {
   jid: string;
+  pushName?: string;
   timestampMs: number;
 }
 
