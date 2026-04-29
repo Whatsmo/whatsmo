@@ -23,6 +23,7 @@
   "dependencies": {
     "@tauri-apps/api": "^2.10.0",
     "@tauri-apps/plugin-notification": "^2.3.3",
+    "material-symbols": "0.44.4",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {

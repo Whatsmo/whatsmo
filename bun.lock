@@ -7,6 +7,7 @@
       "dependencies": {
         "@tauri-apps/api": "^2.10.0",
         "@tauri-apps/plugin-notification": "^2.3.3",
+        "material-symbols": "0.44.4",
         "qrcode": "^1.5.4",
       },
       "devDependencies": {
@@ -251,6 +252,8 @@
     "locate-path": ["locate-path@5.0.0", "", { "dependencies": { "p-locate": "^4.1.0" } }, "sha512-t7hw9pI+WvuwNJXwk5zVHpyhIqzg2qTlklJOf0mVxGSbe3Fp2VieZcduNYjaLDoy6p9uGpQEGWG87WpMKlNq8g=="],
 
     "magic-string": ["magic-string@0.30.21", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.5" } }, "sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ=="],
+
+    "material-symbols": ["material-symbols@0.44.4", "", {}, "sha512-ccUeNNV+zdpO/ZB/IYgLFBk8HLBdT6O/89SYtMZFLizAwVokbCzhpWkJq67im781OOB3PYpe2Cm2sVy+Nbs36A=="],
 
     "mri": ["mri@1.2.0", "", {}, "sha512-tzzskb3bG8LvYGFF/mDTpq3jpI6Q9wc3LEmBaghu+DdCssd1FakN7Bc0hVNmEyGq1bq3RgfkCb3cmQLpNPOroA=="],
 
