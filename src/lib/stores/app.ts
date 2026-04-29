@@ -37,16 +37,18 @@ import {
   syncContactProfiles as syncContactProfilesApi,
   syncGroupMetadata as syncGroupMetadataApi
 } from '$lib/api/whatsmo';
+import { createMediaPreviewDataUrl, fileToBytes } from '$lib/utils/media';
 
 const now = Date.now();
 const STORAGE_KEY = 'whatsmo.chat-state.v1';
 const MAX_PERSISTED_MESSAGES_PER_CHAT = 120;
 const MAX_ATTACHMENT_BYTES = 64 * 1024 * 1024;
-const MAX_CACHED_MEDIA_BYTES = 8 * 1024 * 1024;
+const MAX_CACHED_MEDIA_BYTES = 2 * 1024 * 1024;
 const queuedRetryKeys = new Set<string>();
 let queuedRetryTimer: number | undefined;
 let groupMetadataTimer: number | undefined;
 let contactProfileTimer: number | undefined;
+const typingTimers = new Map<string, number>();
 
 const contacts: ContactProfile[] = [
   {
@@ -83,6 +85,7 @@ const chats: ChatSummary[] = [
     unreadCount: 2,
     muted: false,
     pinned: true,
+    archived: false,
     avatarGradient: contacts[0].avatarGradient,
     lastMessageAt: now - 1000 * 60 * 3,
     typing: 'typing...'
@@ -95,6 +98,7 @@ const chats: ChatSummary[] = [
     unreadCount: 5,
     muted: false,
     pinned: false,
+    archived: false,
     avatarGradient: contacts[1].avatarGradient,
     lastMessageAt: now - 1000 * 60 * 24,
     participantCount: 8
@@ -107,6 +111,7 @@ const chats: ChatSummary[] = [
     unreadCount: 0,
     muted: true,
     pinned: false,
+    archived: false,
     avatarGradient: contacts[2].avatarGradient,
     lastMessageAt: now - 1000 * 60 * 80
   }
@@ -223,6 +228,47 @@ export function selectChat(chatId: string): void {
     ...state,
     selectedChatId: chatId,
     chats: state.chats.map((chat) => (chat.id === chatId ? { ...chat, unreadCount: 0 } : chat))
+  }));
+}
+
+export function toggleChatPinned(chatId: string): void {
+  appState.update((state) => ({
+    ...state,
+    chats: sortChats(
+      state.chats.map((chat) => (chat.id === chatId ? { ...chat, pinned: !chat.pinned, archived: false } : chat))
+    )
+  }));
+}
+
+export function toggleChatMuted(chatId: string): void {
+  appState.update((state) => ({
+    ...state,
+    chats: state.chats.map((chat) => (chat.id === chatId ? { ...chat, muted: !chat.muted } : chat))
+  }));
+}
+
+export function toggleChatArchived(chatId: string): void {
+  appState.update((state) => {
+    const selectedChat = state.chats.find((chat) => chat.id === chatId);
+    const nextArchived = !selectedChat?.archived;
+    return {
+      ...state,
+      selectedChatId: state.selectedChatId === chatId && nextArchived ? '' : state.selectedChatId,
+      chats: sortChats(
+        state.chats.map((chat) =>
+          chat.id === chatId ? { ...chat, archived: nextArchived, pinned: nextArchived ? false : chat.pinned } : chat
+        )
+      )
+    };
+  });
+}
+
+export function toggleChatRead(chatId: string): void {
+  appState.update((state) => ({
+    ...state,
+    chats: state.chats.map((chat) =>
+      chat.id === chatId ? { ...chat, unreadCount: chat.unreadCount > 0 ? 0 : 1 } : chat
+    )
   }));
 }
 
@@ -383,7 +429,34 @@ export async function syncKnownContactProfiles(contactIds?: string[]): Promise<v
 }
 
 export function handleContactUpdated(payload: ContactUpdatedPayload): void {
+  if (payload.pushName && !isRawIdentifierName(payload.pushName)) {
+    applySenderPushName(payload.jid, payload.pushName, payload.timestampMs);
+  }
+
   void syncKnownContactProfiles([payload.jid]);
+}
+
+function applySenderPushName(senderId: string, pushName: string, timestampMs: number): void {
+  appState.update((state) => {
+    const existing = state.contacts.find((contact) => contact.id === senderId || contact.lid === senderId);
+    const profile: ContactProfile = {
+      ...(existing ?? contactFromJid(senderId)),
+      id: existing?.id ?? senderId,
+      name: pushName,
+      profileUpdatedAt: timestampMs
+    };
+    const contacts = upsertContacts(state.contacts, [profile]);
+    return {
+      ...state,
+      contacts,
+      messages: updateMessageSenderNames(state.messages, contacts),
+      chats: sortChats(
+        state.chats.map((chat) =>
+          chat.id === senderId || chat.id === existing?.id ? { ...chat, title: pushName } : chat
+        )
+      )
+    };
+  });
 }
 
 export function handleContactSyncRequested(_payload: ContactSyncRequestedPayload): void {
@@ -429,6 +502,7 @@ export async function sendMessage(chatId: string, text: string): Promise<void> {
     id: crypto.randomUUID(),
     chatId,
     senderId: 'me',
+    senderName: 'You',
     text: trimmed,
     timestamp: Date.now(),
     fromMe: true,
@@ -446,7 +520,15 @@ export async function sendMessage(chatId: string, text: string): Promise<void> {
   }
 }
 
-export async function sendAttachment(chatId: string, file: File, caption = ''): Promise<void> {
+export interface SendAttachmentOptions {
+  caption?: string;
+  viewOnce?: boolean;
+  ptt?: boolean;
+  forcedKind?: MediaKind;
+}
+
+export async function sendAttachment(chatId: string, file: File, options: SendAttachmentOptions | string = ''): Promise<void> {
+  const attachmentOptions: SendAttachmentOptions = typeof options === 'string' ? { caption: options } : options;
   if (file.size === 0) {
     throw new Error('Attachment file is empty.');
   }
@@ -454,17 +536,24 @@ export async function sendAttachment(chatId: string, file: File, caption = ''): 
     throw new Error('Attachment is too large. Maximum supported size is 64 MB.');
   }
 
-  const kind = mediaKindFromFile(file);
+  const kind = attachmentOptions.forcedKind ?? mediaKindFromFile(file);
   if (!kind) {
     throw new Error('Unsupported attachment type. Use an image, video, or document file.');
   }
 
-  const trimmedCaption = caption.trim();
+  const trimmedCaption = (attachmentOptions.caption ?? '').trim();
   const name = file.name || `${kind}-attachment`;
+  const bytes = await fileToBytes(file);
+  const mimeType = file.type || fallbackMimeType(kind);
+  const previewUrl = kind !== 'document' ? await createMediaPreviewDataUrl(file) : undefined;
+  const cachedDataUrl = kind !== 'document' && file.size <= MAX_CACHED_MEDIA_BYTES
+    ? bytesToDataUrl(bytes, mimeType)
+    : undefined;
   const optimistic: ChatMessage = {
     id: crypto.randomUUID(),
     chatId,
     senderId: 'me',
+    senderName: 'You',
     text: trimmedCaption || undefined,
     timestamp: Date.now(),
     fromMe: true,
@@ -472,21 +561,29 @@ export async function sendAttachment(chatId: string, file: File, caption = ''): 
     media: {
       id: crypto.randomUUID(),
       kind,
-      name
+      name,
+      mimeType,
+      previewUrl,
+      cachedDataUrl,
+      cachedAt: cachedDataUrl ? Date.now() : undefined,
+      viewOnce: attachmentOptions.viewOnce,
+      ptt: attachmentOptions.ptt
     }
   };
 
   appendMessage(optimistic);
 
   try {
-    const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
     const sent = await sendMediaMessage(
       chatId,
       kind,
       bytes,
-      file.type || fallbackMimeType(kind),
+      mimeType,
       name,
-      trimmedCaption || undefined
+      trimmedCaption || undefined,
+      undefined,
+      attachmentOptions.viewOnce,
+      attachmentOptions.ptt
     );
     markMessageStatus(chatId, optimistic.id, 'sent', sent.id);
   } catch (error) {
@@ -592,24 +689,29 @@ export function ingestIncomingMessage(payload: IncomingMessagePayload): void {
     return;
   }
 
+  const currentState = get(appState);
   const message: ChatMessage = {
     id: payload.id,
     chatId: payload.chatId,
     senderId: payload.senderId,
+    senderName: resolveMessageSenderName(currentState, payload.senderId, payload.senderName),
     text: payload.text,
     timestamp: payload.timestampMs,
     fromMe: payload.fromMe,
     status: payload.fromMe ? 'sent' : 'delivered',
-    media: payload.media
+    media: normalizeMediaAttachment(payload.media)
   };
 
   appendMessage(message);
+  if (payload.senderName && !isRawIdentifierName(payload.senderName)) {
+    applySenderPushName(payload.senderId, payload.senderName, payload.timestampMs);
+  }
   scheduleContactProfileSync([payload.senderId, payload.isGroup ? '' : payload.chatId]);
 
   const state = get(appState);
   const chat = state.chats.find((item) => item.id === payload.chatId);
   if (state.notificationEnabled && chat && !payload.fromMe) {
-    notifyNewMessage(chat.title, payload.text ?? 'New WhatsApp message');
+    notifyNewMessage(chat.title, payload.text ?? 'New WhatsApp message', payload.chatId);
   }
 }
 
@@ -675,6 +777,7 @@ export function ingestHistorySync(payload: HistorySyncPayload): void {
       unreadCount: existingChat?.unreadCount ?? payload.unreadCount,
       muted: existingChat?.muted ?? false,
       pinned: existingChat?.pinned ?? false,
+      archived: existingChat?.archived ?? false,
       avatarGradient: existingChat?.avatarGradient ?? gradientFromId(payload.chatId),
       lastMessageAt: lastMessage?.timestamp ?? payload.lastMessageAt,
       participantCount: existingChat?.participantCount
@@ -707,10 +810,12 @@ export function applyContactProfiles(profiles: ContactProfilePayload[]): void {
   appState.update((state) => {
     const contacts = upsertContacts(state.contacts, incomingProfiles);
     const profileMap = new Map(incomingProfiles.map((profile) => [profile.id, profile]));
+    const messages = updateMessageSenderNames(state.messages, contacts);
 
     return {
       ...state,
       contacts,
+      messages,
       chats: sortChats(
         state.chats.map((chat) => {
           const profile = profileMap.get(chat.id);
@@ -767,14 +872,50 @@ export function setHistoryProgress(payload: HistorySyncProgressPayload): void {
 }
 
 export function setTyping(payload: TypingPayload): void {
+  const timerKey = `${payload.chatId}:${payload.name}`;
+  if (typeof window !== 'undefined') {
+    window.clearTimeout(typingTimers.get(timerKey));
+    typingTimers.delete(timerKey);
+  }
+
   appState.update((state) => ({
     ...state,
     chats: state.chats.map((chat) =>
       chat.id === payload.chatId
-        ? { ...chat, typing: payload.isTyping ? `${payload.name} is typing...` : undefined }
+        ? { ...chat, typing: payload.isTyping ? `${resolveTypingName(state, payload)} is typing...` : undefined }
         : chat
     )
   }));
+
+  if (payload.isTyping && typeof window !== 'undefined') {
+    typingTimers.set(
+      timerKey,
+      window.setTimeout(() => {
+        clearTyping(payload.chatId, timerKey);
+      }, 6500)
+    );
+  }
+}
+
+function clearTyping(chatId: string, timerKey: string): void {
+  typingTimers.delete(timerKey);
+  appState.update((state) => ({
+    ...state,
+    chats: state.chats.map((chat) => (chat.id === chatId ? { ...chat, typing: undefined } : chat))
+  }));
+}
+
+function resolveTypingName(state: AppModel, payload: TypingPayload): string {
+  const contact = state.contacts.find((item) => item.id === payload.name || item.lid === payload.name);
+  if (contact) return contact.name;
+
+  const senderUser = shortJid(payload.name);
+  const phoneContact = state.contacts.find((item) => shortJid(item.id) === senderUser || shortJid(item.phone) === senderUser);
+  if (phoneContact) return phoneContact.name;
+
+  if (/^\d+$/.test(senderUser)) return `+${senderUser}`;
+
+  return displayNameFromJid(payload.name);
 }
 
 export function setReceipt(payload: ReceiptPayload): void {
@@ -800,6 +941,7 @@ function appendMessage(message: ChatMessage): void {
       unreadCount: 0,
       muted: false,
       pinned: false,
+      archived: false,
       avatarGradient: 'linear-gradient(135deg, #25d366, #128c7e)',
       lastMessageAt: message.timestamp
     };
@@ -833,15 +975,17 @@ function appendMessage(message: ChatMessage): void {
 }
 
 function messageFromIncomingPayload(payload: IncomingMessagePayload): ChatMessage {
+  const state = get(appState);
   return {
     id: payload.id,
     chatId: payload.chatId,
     senderId: payload.senderId,
+    senderName: resolveMessageSenderName(state, payload.senderId, payload.senderName),
     text: payload.text,
     timestamp: payload.timestampMs,
     fromMe: payload.fromMe,
     status: payload.fromMe ? 'sent' : 'delivered',
-    media: payload.media
+    media: normalizeMediaAttachment(payload.media)
   };
 }
 
@@ -948,15 +1092,31 @@ function queueKey(chatId: string, messageId: string): string {
 }
 
 function mediaKindFromFile(file: File): MediaKind | null {
+  if (file.type === 'image/webp' || file.name.toLowerCase().endsWith('.webp')) return 'sticker';
   if (file.type.startsWith('image/')) return 'image';
   if (file.type.startsWith('video/')) return 'video';
+  if (file.type.startsWith('audio/')) return 'audio';
   return 'document';
 }
 
 function fallbackMimeType(kind: MediaKind): string {
   if (kind === 'image') return 'image/jpeg';
   if (kind === 'video') return 'video/mp4';
+  if (kind === 'audio') return 'audio/ogg; codecs=opus';
+  if (kind === 'sticker') return 'image/webp';
   return 'application/octet-stream';
+}
+
+function normalizeMediaAttachment(media?: MediaAttachment): MediaAttachment | undefined {
+  if (!media) return undefined;
+  if (media.previewUrl || media.cachedDataUrl || !media.thumbnail || typeof window === 'undefined') {
+    return media;
+  }
+
+  return {
+    ...media,
+    previewUrl: bytesToDataUrl(media.thumbnail, media.kind === 'sticker' ? 'image/png' : 'image/jpeg')
+  };
 }
 
 function bytesToDataUrl(bytes: number[], mimeType: string): string {
@@ -1104,7 +1264,7 @@ function profileFromLookup(contact: ContactLookupPayload): ContactProfile {
 function profileFromPayload(contact: ContactProfilePayload): ContactProfile {
   return {
     id: contact.id,
-    name: displayNameFromJid(contact.id),
+    name: contact.phone ? `+${contact.phone}` : displayNameFromJid(contact.id),
     phone: `+${contact.phone}`,
     about: contact.about ?? (contact.isBusiness ? 'Business account' : 'WhatsApp contact'),
     avatarGradient: gradientFromId(contact.id),
@@ -1114,6 +1274,54 @@ function profileFromPayload(contact: ContactProfilePayload): ContactProfile {
     profileUpdatedAt: contact.updatedAtMs,
     isBusiness: contact.isBusiness
   };
+}
+
+function updateMessageSenderNames(
+  messages: Record<string, ChatMessage[]>,
+  contacts: ContactProfile[]
+): Record<string, ChatMessage[]> {
+  return Object.fromEntries(
+    Object.entries(messages).map(([chatId, chatMessages]) => [
+      chatId,
+      chatMessages.map((message) => ({
+        ...message,
+        senderName: message.fromMe ? message.senderName : resolveSenderNameFromContacts(contacts, message.senderId, message.senderName)
+      }))
+    ])
+  );
+}
+
+function resolveMessageSenderName(state: AppModel, senderId: string, providedName?: string): string {
+  if (providedName && !isRawIdentifierName(providedName)) {
+    return providedName;
+  }
+
+  return resolveSenderNameFromContacts(state.contacts, senderId, providedName);
+}
+
+function resolveSenderNameFromContacts(
+  contacts: ContactProfile[],
+  senderId: string,
+  currentName?: string
+): string {
+  const contact = contacts.find(
+    (item) => item.id === senderId || item.lid === senderId || shortJid(item.id) === shortJid(senderId)
+  );
+  if (contact) return contact.name || contact.phone;
+
+  if (currentName && !isRawIdentifierName(currentName)) return currentName;
+
+  if (senderId.includes('@s.whatsapp.net')) {
+    const user = shortJid(senderId);
+    return /^\d+$/.test(user) ? `+${user}` : user;
+  }
+
+  return 'Unknown contact';
+}
+
+function isRawIdentifierName(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.includes('@') || /^\d{8,}$/.test(trimmed);
 }
 
 function collectKnownContactJids(state: AppModel): string[] {
@@ -1184,6 +1392,10 @@ function migrateMessagesByContactId(
 function displayNameFromJid(jid: string): string {
   if (jid.includes('@g.us')) {
     return `Group ${shortJid(jid)}`;
+  }
+
+  if (jid.includes('@lid')) {
+    return 'Unknown contact';
   }
 
   const user = shortJid(jid);

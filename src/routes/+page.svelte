@@ -1,12 +1,15 @@
 <script lang="ts">
+  import 'material-symbols/rounded.css';
   import { onMount } from 'svelte';
   import type { UnlistenFn } from '@tauri-apps/api/event';
   import AuthPanel from '$lib/components/AuthPanel.svelte';
   import ChatList from '$lib/components/ChatList.svelte';
   import ChatWindow from '$lib/components/ChatWindow.svelte';
+  import Icon from '$lib/components/Icon.svelte';
   import StatusPanel from '$lib/components/StatusPanel.svelte';
   import SettingsPanel from '$lib/components/SettingsPanel.svelte';
-  import { connectBridge } from '$lib/api/whatsmo';
+  import type { MediaKind } from '$lib/api/types';
+  import { connectBridge, connectNotificationActions } from '$lib/api/whatsmo';
   import {
     appState,
     downloadAttachment,
@@ -28,13 +31,20 @@
     setConnection,
     setHistoryProgress,
     setReceipt,
-    setTyping
+    setTyping,
+    toggleChatArchived,
+    toggleChatMuted,
+    toggleChatPinned,
+    toggleChatRead
   } from '$lib/stores/app';
 
   let bridgeCleanup: UnlistenFn | undefined;
+  let notificationActionCleanup: UnlistenFn | undefined;
   let attachNotice = false;
+  let pendingAttachment: { chatId: string; file: File; kind: MediaKind; previewUrl?: string; caption: string; viewOnce: boolean } | null = null;
   let authModalOpen = false;
   let activeScreen: 'chats' | 'chat' | 'updates' | 'settings' = 'chats';
+  let suppressHistoryPush = false;
 
   $: linkLabel =
     $appState.auth.mode === 'connected'
@@ -45,6 +55,17 @@
   $: linkModalTitle = $appState.auth.mode === 'connected' ? 'Linked account' : 'Link this device';
 
   onMount(() => {
+    window.history.replaceState({ screen: activeScreen, authModalOpen }, '');
+
+    const handlePopState = (event: PopStateEvent) => {
+      const state = event.state as { screen?: typeof activeScreen; authModalOpen?: boolean } | null;
+      suppressHistoryPush = true;
+      authModalOpen = Boolean(state?.authModalOpen);
+      activeScreen = state?.screen ?? 'chats';
+      suppressHistoryPush = false;
+    };
+
+    window.addEventListener('popstate', handlePopState);
     void requestNotifications();
     void connectBridge({
       onAuth: (payload) => {
@@ -67,15 +88,37 @@
       bridgeCleanup = cleanup;
       void resumeSession();
     });
+    void connectNotificationActions((chatId) => {
+      selectChat(chatId);
+      activeScreen = 'chat';
+      authModalOpen = false;
+      pushNavigationState();
+    }).then((cleanup) => {
+      notificationActionCleanup = cleanup;
+    });
 
     return () => {
+      window.removeEventListener('popstate', handlePopState);
       bridgeCleanup?.();
+      notificationActionCleanup?.();
     };
   });
 
+  function pushNavigationState(): void {
+    if (suppressHistoryPush) return;
+    window.history.pushState({ screen: activeScreen, authModalOpen }, '');
+  }
+
   async function handleAttachment(chatId: string, file: File): Promise<void> {
     try {
-      await sendAttachment(chatId, file);
+      pendingAttachment = {
+        chatId,
+        file,
+        kind: mediaKindFromFile(file),
+        previewUrl: file.type.startsWith('image/') || file.type.startsWith('video/') ? URL.createObjectURL(file) : undefined,
+        caption: '',
+        viewOnce: false
+      };
     } catch (error) {
       attachNotice = true;
       window.setTimeout(() => {
@@ -85,13 +128,61 @@
     }
   }
 
+  async function sendPendingAttachment(): Promise<void> {
+    if (!pendingAttachment) return;
+    const attachment = pendingAttachment;
+    pendingAttachment = null;
+    try {
+      await sendAttachment(attachment.chatId, attachment.file, {
+        caption: attachment.caption,
+        viewOnce: attachment.viewOnce,
+        ptt: attachment.kind === 'audio',
+        forcedKind: attachment.kind
+      });
+    } catch (error) {
+      attachNotice = true;
+      window.setTimeout(() => {
+        attachNotice = false;
+      }, 3200);
+      console.error('Attachment send failed', error);
+    } finally {
+      if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+    }
+  }
+
+  function cancelPendingAttachment(): void {
+    if (pendingAttachment?.previewUrl) URL.revokeObjectURL(pendingAttachment.previewUrl);
+    pendingAttachment = null;
+  }
+
+  function mediaKindFromFile(file: File): MediaKind {
+    if (file.type === 'image/webp' || file.name.toLowerCase().endsWith('.webp')) return 'sticker';
+    if (file.type.startsWith('image/')) return 'image';
+    if (file.type.startsWith('video/')) return 'video';
+    if (file.type.startsWith('audio/')) return 'audio';
+    return 'document';
+  }
+
   function openChat(chatId: string): void {
     selectChat(chatId);
     activeScreen = 'chat';
+    authModalOpen = false;
+    pushNavigationState();
   }
 
   function closeAuthModal(): void {
+    if (authModalOpen) window.history.back();
+  }
+
+  function openAuthModal(): void {
+    authModalOpen = true;
+    pushNavigationState();
+  }
+
+  function setScreen(screen: 'chats' | 'updates' | 'settings'): void {
+    activeScreen = screen;
     authModalOpen = false;
+    pushNavigationState();
   }
 </script>
 
@@ -114,8 +205,10 @@
     {#if activeScreen === 'chat' && $selectedChat}
       <ChatWindow
         chat={$selectedChat}
+        contact={$appState.contacts.find((contact) => contact.id === $selectedChat.id || contact.lid === $selectedChat.id) ?? null}
+        group={$appState.groups[$selectedChat.id] ?? null}
         messages={$selectedMessages}
-        onBack={() => (activeScreen = 'chats')}
+        onBack={() => setScreen('chats')}
         onSend={sendMessage}
         onRetry={retryMessage}
         onDownloadMedia={downloadAttachment}
@@ -126,15 +219,23 @@
         {#if activeScreen !== 'settings'}
         <header class="app-header">
           <h1>Whatsmo</h1>
-          <button
-            class:connected={$appState.auth.mode === 'connected'}
-            class="link-button"
-            aria-haspopup="dialog"
-            aria-expanded={authModalOpen}
-            on:click={() => (authModalOpen = true)}
-          >
-            {linkLabel}
-          </button>
+          <div class="header-actions">
+            <button class="icon-button" aria-label="Camera">
+              <Icon name="photo_camera" />
+            </button>
+            <button
+              class:connected={$appState.auth.mode === 'connected'}
+              class="link-button"
+              aria-haspopup="dialog"
+              aria-expanded={authModalOpen}
+              on:click={openAuthModal}
+            >
+              {linkLabel}
+            </button>
+            <button class="icon-button" aria-label="More options">
+              <Icon name="more_vert" />
+            </button>
+          </div>
         </header>
         {/if}
 
@@ -147,7 +248,15 @@
           {/if}
 
           {#if activeScreen === 'chats'}
-            <ChatList chats={$appState.chats} selectedChatId={$appState.selectedChatId} onSelect={openChat} />
+            <ChatList
+              chats={$appState.chats}
+              selectedChatId={$appState.selectedChatId}
+              onSelect={openChat}
+              onToggleArchive={toggleChatArchived}
+              onToggleMute={toggleChatMuted}
+              onTogglePin={toggleChatPinned}
+              onToggleRead={toggleChatRead}
+            />
           {:else if activeScreen === 'settings'}
             <SettingsPanel />
           {:else}
@@ -156,14 +265,14 @@
         </div>
 
         <nav class="bottom-nav" aria-label="Primary navigation">
-          <button class:active={activeScreen === 'chats'} on:click={() => (activeScreen = 'chats')}>
-            <span class="material-symbols-rounded">chat</span> Chats
+          <button class:active={activeScreen === 'chats'} on:click={() => setScreen('chats')}>
+            <span><Icon name="chat" /></span> Chats
           </button>
-          <button class:active={activeScreen === 'updates'} on:click={() => (activeScreen = 'updates')}>
-            <span class="material-symbols-rounded">data_usage</span> Updates
+          <button class:active={activeScreen === 'updates'} on:click={() => setScreen('updates')}>
+            <span><Icon name="updates" /></span> Updates
           </button>
-          <button class:active={activeScreen === 'settings'} on:click={() => (activeScreen = 'settings')}>
-            <span class="material-symbols-rounded">settings</span> Settings
+          <button class:active={activeScreen === 'settings'} on:click={() => setScreen('settings')}>
+            <span><Icon name="settings" /></span> Settings
           </button>
         </nav>
       </div>
@@ -172,6 +281,35 @@
 
   {#if attachNotice}
     <div class="toast" role="status">Could not send attachment. Check file type, size, and connection.</div>
+  {/if}
+
+  {#if pendingAttachment}
+    <div class="attachment-preview" role="dialog" aria-modal="true" aria-label="Preview attachment">
+      <section>
+        <header>
+          <strong>{pendingAttachment.kind === 'document' ? pendingAttachment.file.name : pendingAttachment.kind}</strong>
+          <button aria-label="Cancel attachment" on:click={cancelPendingAttachment}>×</button>
+        </header>
+        <div class="attachment-preview__body">
+          {#if pendingAttachment.previewUrl && pendingAttachment.kind === 'image'}
+            <img src={pendingAttachment.previewUrl} alt="" />
+          {:else if pendingAttachment.previewUrl && pendingAttachment.kind === 'video'}
+            <video src={pendingAttachment.previewUrl} controls preload="metadata"><track kind="captions" /></video>
+          {:else if pendingAttachment.kind === 'audio'}
+            <p>Voice message ready to send</p>
+          {:else}
+            <p>{pendingAttachment.file.name}</p>
+          {/if}
+        </div>
+        {#if pendingAttachment.kind !== 'sticker' && pendingAttachment.kind !== 'audio'}
+          <input bind:value={pendingAttachment.caption} placeholder="Add a caption" />
+        {/if}
+        {#if pendingAttachment.kind === 'image' || pendingAttachment.kind === 'video'}
+          <label><input bind:checked={pendingAttachment.viewOnce} type="checkbox" /> View once</label>
+        {/if}
+        <button class="send-preview" on:click={sendPendingAttachment}>Send</button>
+      </section>
+    </div>
   {/if}
 
   {#if authModalOpen}
@@ -200,31 +338,31 @@
   }
 
   :global(:root) {
-    --display-font: ui-rounded, 'Avenir Next Rounded Std', 'Trebuchet MS', sans-serif;
-    --body-font: ui-rounded, 'Avenir Next Rounded Std', 'Trebuchet MS', sans-serif;
+    --display-font: Roboto, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --body-font: Roboto, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     --safe-top: env(safe-area-inset-top, 0px);
     --safe-right: env(safe-area-inset-right, 0px);
     --safe-bottom: env(safe-area-inset-bottom, 0px);
     --safe-left: env(safe-area-inset-left, 0px);
 
     /* Material 3 Light Mode Colors (default) */
-    --wa-green: #008069;
-    --wa-green-dark: #075e54;
+    --wa-green: #25d366;
+    --wa-green-dark: #008069;
     --wa-mint: #d9fdd3;
-    --ink: #101f1b;
+    --ink: #111b21;
     --muted: #667781;
-    --paper: #fbfbf6;
-    --border-color: #edf0eb;
-    --nav-bg: #fbfbf6;
-    --nav-active: #e7f6ef;
-    --message-in: white;
+    --paper: #ffffff;
+    --border-color: #e9edef;
+    --nav-bg: #ffffff;
+    --nav-active: #d8fdd2;
+    --message-in: #ffffff;
     --message-out: #d9fdd3;
-    --app-bg: #efe7dd;
+    --app-bg: #efeae2;
     /* Auth Modal light defaults */
     --modal-bg: var(--paper);
     --auth-bg: #e7f6ef;
     --auth-input-bg: rgba(255, 255, 255, 0.86);
-    --auth-input-text: #0b211a;
+    --auth-input-text: #111b21;
     --auth-card-bg: rgba(255, 255, 255, 0.72);
 
     color: var(--ink);
@@ -238,15 +376,15 @@
 
   /* Material 3 Dark Mode Colors */
   .app-stage[data-theme="dark"] {
-    --wa-green: #25d366;
-    --wa-green-dark: #81cbb4;
+    --wa-green: #21c063;
+    --wa-green-dark: #00a884;
     --wa-mint: #005c4b;
     --ink: #e9edef;
     --muted: #8696a0;
-    --paper: #0b141a;
+    --paper: #111b21;
     --border-color: #202c33;
     --nav-bg: #111b21;
-    --nav-active: #202c33;
+    --nav-active: #374248;
     --message-in: #202c33;
     --message-out: #005c4b;
     --app-bg: #0b141a;
@@ -260,15 +398,15 @@
 
   @media (prefers-color-scheme: dark) {
     .app-stage[data-theme="system"] {
-      --wa-green: #25d366;
-      --wa-green-dark: #81cbb4;
+      --wa-green: #21c063;
+      --wa-green-dark: #00a884;
       --wa-mint: #005c4b;
       --ink: #e9edef;
       --muted: #8696a0;
-      --paper: #0b141a;
+      --paper: #111b21;
       --border-color: #202c33;
       --nav-bg: #111b21;
-      --nav-active: #202c33;
+      --nav-active: #374248;
       --message-in: #202c33;
       --message-out: #005c4b;
       --app-bg: #0b141a;
@@ -285,10 +423,7 @@
     min-width: 320px;
     min-height: 100vh;
     margin: 0;
-    background:
-      radial-gradient(circle at 50% -10%, rgba(37, 211, 102, 0.32), transparent 34rem),
-      radial-gradient(circle at 16% 92%, rgba(0, 128, 105, 0.22), transparent 28rem),
-      linear-gradient(145deg, #07110f, #17211e 55%, #070b0a);
+    background: #0b141a;
   }
 
   :global(button),
@@ -310,6 +445,7 @@
 
   .device {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: 1fr;
     width: min(100%, 430px);
     height: min(920px, calc(100vh - 28px));
@@ -338,7 +474,6 @@
     min-height: 0;
     overflow: hidden;
     position: relative;
-    z-index: 1;
   }
 
   .screen-content :global(.chat-list),
@@ -352,7 +487,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: calc(14px + var(--safe-top)) 18px 14px;
+    padding: calc(16px + var(--safe-top)) 16px 12px;
     color: var(--ink);
     background: var(--paper);
     z-index: 5;
@@ -360,43 +495,60 @@
 
   .app-header h1 {
     margin: 0;
-  }
-
-  .app-header h1 {
-    font-size: 1.6rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
+    font-size: 1.4rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
     color: var(--wa-green);
   }
 
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .icon-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: 0;
+    border-radius: 50%;
+    color: var(--ink);
+    background: transparent;
+    font-size: 1.5rem;
+    cursor: pointer;
+  }
+
   .link-button {
-    min-height: 38px;
-    border: 1px solid var(--border-color);
+    min-height: 36px;
+    border: 0;
     border-radius: 999px;
-    padding: 0 14px;
+    padding: 0 16px;
     color: var(--ink);
     font: inherit;
-    font-size: 0.82rem;
-    font-weight: 700;
+    font-size: 0.85rem;
+    font-weight: 500;
     background: transparent;
     cursor: pointer;
   }
 
   .link-button.connected {
-    color: var(--wa-green-dark, #073b2f);
-    background: var(--nav-active, #d9fdd3);
-    border-color: var(--nav-active, #d9fdd3);
+    color: var(--wa-green-dark);
+    background: var(--nav-active);
   }
 
   .bottom-nav {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 4px;
-    padding: 8px 12px max(12px, var(--safe-bottom));
+    padding: 0 12px max(0px, var(--safe-bottom));
     border-top: 1px solid var(--border-color);
     background: var(--nav-bg);
     position: relative;
     z-index: 10;
+    min-height: 80px;
   }
 
   .bottom-nav button {
@@ -405,23 +557,22 @@
     gap: 4px;
     align-items: center;
     justify-content: center;
-    min-height: 56px;
+    height: 100%;
     width: 100%;
     border: 0;
-    border-radius: 12px;
-    padding: 6px;
+    border-radius: 0;
+    padding: 12px 6px 16px;
     color: var(--muted);
     font: inherit;
     font-size: 0.75rem;
     font-weight: 600;
     background: transparent;
-    line-height: 1.1;
-    transition: color 0.15s ease, background-color 0.15s ease;
+    line-height: 1.2;
     cursor: pointer;
   }
 
   .bottom-nav button.active {
-    color: var(--wa-green);
+    color: var(--ink);
   }
 
   .bottom-nav span {
@@ -430,7 +581,7 @@
     justify-content: center;
     width: 64px;
     height: 32px;
-    font-size: 1.6rem;
+    font-size: 1.5rem;
     border-radius: 16px;
     transition: background-color 0.2s ease;
   }
@@ -441,40 +592,123 @@
 
   .history-sync-banner {
     display: grid;
-    gap: 3px;
-    margin: 8px 12px 10px;
-    padding: 12px 14px;
-    border-radius: 12px;
-    color: #075e54;
-    background: #eef7f3;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    gap: 4px;
+    margin: 0;
+    padding: 12px 16px;
+    color: var(--wa-green-dark);
+    background: var(--nav-active);
+    border-bottom: 1px solid var(--border-color);
   }
 
   .history-sync-banner.active {
-    background: #d9fdd3;
+    background: var(--wa-mint);
   }
 
   .history-sync-banner strong {
-    font-size: 0.85rem;
+    font-size: 0.9rem;
+    font-weight: 500;
   }
 
   .history-sync-banner span {
-    color: #4d5e58;
-    font-size: 0.8rem;
-    line-height: 1.35;
+    color: var(--muted);
+    font-size: 0.85rem;
+    line-height: 1.4;
   }
 
   .toast {
     position: fixed;
-    right: 22px;
-    bottom: 22px;
-    max-width: min(360px, calc(100vw - 44px));
+    right: 16px;
+    bottom: 16px;
+    max-width: min(360px, calc(100vw - 32px));
     padding: 14px 16px;
+    border-radius: 8px;
+    color: var(--paper);
+    font-size: 0.9rem;
+    background: var(--ink);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  .attachment-preview {
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    display: grid;
+    place-items: end center;
+    background: rgba(0, 0, 0, 0.58);
+    backdrop-filter: blur(8px);
+  }
+
+  .attachment-preview section {
+    display: grid;
+    gap: 12px;
+    width: min(100%, 430px);
+    max-height: 86vh;
+    overflow-y: auto;
+    border-radius: 28px 28px 0 0;
+    padding: 16px 16px max(18px, calc(14px + var(--safe-bottom)));
+    color: var(--ink);
+    background: var(--paper);
+  }
+
+  .attachment-preview header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .attachment-preview header button {
+    width: 38px;
+    height: 38px;
+    border: 0;
+    border-radius: 999px;
+    color: var(--ink);
+    font-size: 1.5rem;
+    background: var(--nav-active);
+  }
+
+  .attachment-preview__body {
+    display: grid;
+    place-items: center;
+    min-height: 180px;
     border-radius: 18px;
-    color: #0b211a;
-    font-weight: 900;
-    background: var(--wa-mint);
-    box-shadow: 0 18px 46px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+    background: var(--nav-active);
+  }
+
+  .attachment-preview__body img,
+  .attachment-preview__body video {
+    width: 100%;
+    max-height: 46vh;
+    object-fit: contain;
+  }
+
+  .attachment-preview > section > input:not([type]) {
+    min-height: 44px;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 0 12px;
+    color: var(--ink);
+    background: transparent;
+    font: inherit;
+  }
+
+  .attachment-preview label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+    font-weight: 850;
+  }
+
+  .send-preview {
+    min-height: 48px;
+    border: 0;
+    border-radius: 999px;
+    color: white;
+    font: inherit;
+    font-weight: 950;
+    background: var(--wa-green);
   }
 
   .modal-backdrop {
@@ -496,8 +730,8 @@
     width: min(100%, 430px);
     max-height: min(78vh, 720px);
     overflow-y: auto;
-    border-radius: 30px 30px 26px 26px;
-    padding: 16px;
+    border-radius: 28px 28px 24px 24px;
+    padding: 24px;
     background: var(--modal-bg, var(--paper));
     box-shadow: 0 28px 90px rgba(0, 0, 0, 0.38);
     animation: modal-rise 180ms ease-out both;
@@ -524,8 +758,8 @@
 
   .link-modal__header h2 {
     color: var(--ink);
-    font-size: 1.3rem;
-    letter-spacing: -0.03em;
+    font-size: 1.4rem;
+    font-weight: 400;
   }
 
   .link-modal__header button {
@@ -533,11 +767,10 @@
     height: 40px;
     border: 0;
     border-radius: 999px;
-    color: var(--muted);
+    color: var(--ink);
     font: inherit;
-    font-size: 1.45rem;
-    font-weight: 700;
-    background: var(--nav-active);
+    font-size: 1.5rem;
+    background: transparent;
   }
 
   @keyframes modal-rise {
