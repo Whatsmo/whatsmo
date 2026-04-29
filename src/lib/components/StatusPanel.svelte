@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { AuthPayload, ContactProfile, StatusPostPayload, StatusPrivacy } from '$lib/api/types';
+  import Icon from './Icon.svelte';
   import {
     revokeStatus,
     sendImageStatus,
@@ -9,6 +10,7 @@
     sendVideoStatus
   } from '$lib/api/whatsmo';
   import { syncContactsByPhoneNumbers } from '$lib/stores/app';
+  import { createImageThumbnailBytes, createVideoThumbnailBytes, fileToBytes } from '$lib/utils/media';
 
   export let auth: AuthPayload;
   export let contacts: ContactProfile[] = [];
@@ -77,7 +79,7 @@
     if (mode === 'text') return text.trim().length > 0;
     if (mode === 'raw') return rawText.trim().length > 0;
     if (mode === 'image') return imageFile !== null;
-    if (mode === 'video') return videoFile !== null && thumbnailFile !== null;
+    if (mode === 'video') return videoFile !== null;
     if (mode === 'revoke') return revokeMessageId.trim().length > 0;
     return false;
   }
@@ -134,11 +136,6 @@
     return input instanceof HTMLInputElement ? input.files?.[0] ?? null : null;
   }
 
-  async function fileToBytes(file: File): Promise<number[]> {
-    const buffer = await file.arrayBuffer();
-    return Array.from(new Uint8Array(buffer));
-  }
-
   async function submit(): Promise<void> {
     if (!canSubmit) return;
 
@@ -156,13 +153,19 @@
         lastPost = await sendRawStatus(rawText.trim(), recipients, privacy);
         rawText = '';
       } else if (mode === 'image' && imageFile) {
-        lastPost = await sendImageStatus(await fileToBytes(imageFile), null, caption.trim(), recipients, privacy);
+        lastPost = await sendImageStatus(
+          await fileToBytes(imageFile),
+          await createImageThumbnailBytes(imageFile),
+          caption.trim(),
+          recipients,
+          privacy
+        );
         imageFile = null;
         caption = '';
-      } else if (mode === 'video' && videoFile && thumbnailFile) {
+      } else if (mode === 'video' && videoFile) {
         lastPost = await sendVideoStatus(
           await fileToBytes(videoFile),
-          await fileToBytes(thumbnailFile),
+          thumbnailFile ? await fileToBytes(thumbnailFile) : await createVideoThumbnailBytes(videoFile),
           Math.max(1, Math.round(durationSeconds)),
           caption.trim(),
           recipients,
@@ -189,7 +192,7 @@
   <div class="status-header">
     <h2>Status</h2>
     <div class="status-actions">
-      <button class="icon-btn"><span class="material-symbols-rounded">more_vert</span></button>
+      <button class="icon-btn"><Icon name="more" /></button>
     </div>
   </div>
 
@@ -197,10 +200,10 @@
     <button class="status-item my-status" type="button" on:click={() => (isComposing = true)}>
       <div class="avatar-wrapper">
         <div class="avatar my-avatar">
-          <span class="material-symbols-rounded">person</span>
+          <Icon name="person" />
         </div>
         <div class="add-badge">
-          <span class="material-symbols-rounded" style="font-size: 14px;">add</span>
+          <Icon name="add" size="14px" />
         </div>
       </div>
       <span class="status-name">My status</span>
@@ -234,10 +237,10 @@
 
   <div class="fab-container">
     <button class="fab small" on:click={() => { mode = 'text'; isComposing = true; }} aria-label="Text status">
-      <span class="material-symbols-rounded">edit</span>
+      <Icon name="edit" />
     </button>
     <button class="fab" on:click={() => { mode = 'image'; isComposing = true; }} aria-label="Media status">
-      <span class="material-symbols-rounded">camera_alt</span>
+      <Icon name="camera" />
     </button>
   </div>
 </section>
@@ -246,7 +249,7 @@
   <div class="compose-modal">
     <header class="compose-header">
       <button class="icon-btn" on:click={() => (isComposing = false)}>
-        <span class="material-symbols-rounded">arrow_back</span>
+        <Icon name="arrow-back" />
       </button>
       <h2>{mode === 'text' ? 'Type a status' : mode === 'image' || mode === 'video' ? 'Send media' : 'Status Tool'}</h2>
       <div style="width: 40px"></div>
@@ -328,7 +331,7 @@
     <label class="field">
       <span>JPEG thumbnail</span>
       <input accept="image/jpeg,image/jpg" type="file" on:change={handleThumbnailChange} />
-      <small>{thumbnailFile?.name ?? 'Required by whatsapp-rust for video status.'}</small>
+      <small>{thumbnailFile?.name ?? 'Generated automatically if you do not choose one.'}</small>
     </label>
     <label class="field">
       <span>Duration seconds</span>

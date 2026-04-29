@@ -1,10 +1,13 @@
 <script lang="ts">
-  import type { ChatMessage, ChatSummary } from '$lib/api/types';
+  import type { ChatMessage, ChatSummary, ContactProfile, GroupMetadataPayload } from '$lib/api/types';
   import ChatComposer from './ChatComposer.svelte';
+  import Icon from './Icon.svelte';
   import MessageBubble from './MessageBubble.svelte';
 
   export let chat: ChatSummary;
   export let messages: ChatMessage[] = [];
+  export let contact: ContactProfile | null = null;
+  export let group: GroupMetadataPayload | null = null;
   export let onBack: () => void = () => undefined;
   export let onSend: (chatId: string, text: string) => void;
   export let onRetry: (chatId: string, messageId: string) => void = () => undefined;
@@ -15,10 +18,14 @@
 
   let currentChatId = '';
   let visibleMessageCount = MESSAGE_PAGE_SIZE;
+  let selectedMediaMessage: ChatMessage | null = null;
+  let imageZoom = 1;
+  let infoOpen = false;
 
   $: if (chat.id !== currentChatId) {
     currentChatId = chat.id;
     visibleMessageCount = MESSAGE_PAGE_SIZE;
+    infoOpen = false;
   }
 
   $: hiddenMessageCount = Math.max(messages.length - visibleMessageCount, 0);
@@ -28,14 +35,70 @@
     visibleMessageCount = Math.min(messages.length, visibleMessageCount + MESSAGE_PAGE_SIZE);
   }
 
+  function openMedia(message: ChatMessage): void {
+    if (!message.media) return;
+    selectedMediaMessage = message;
+    imageZoom = 1;
+  }
+
+  function closeMedia(): void {
+    selectedMediaMessage = null;
+    imageZoom = 1;
+  }
+
+  function handleMediaGridClick(message: ChatMessage): void {
+    if (!message.media) return;
+    if (message.media.cachedDataUrl || message.media.previewUrl || message.media.kind === 'document') {
+      openMedia(message);
+      return;
+    }
+
+    onDownloadMedia(chat.id, message.id);
+  }
+
   $: groupMetaLabel = chat.kind === 'group'
     ? `${chat.participantCount ?? 0} participants${chat.groupAdminCount ? ` · ${chat.groupAdminCount} admins` : ''}${chat.groupIsAnnouncement ? ' · announcement' : ''}`
     : 'online';
+  $: viewerTitle = selectedMediaMessage?.media
+    ? selectedMediaMessage.media.kind === 'document'
+      ? selectedMediaMessage.media.name
+      : selectedMediaMessage.media.kind === 'video'
+        ? 'Video'
+        : selectedMediaMessage.media.kind === 'audio'
+          ? selectedMediaMessage.media.ptt ? 'Voice message' : 'Audio'
+          : selectedMediaMessage.media.kind === 'sticker'
+            ? 'Sticker'
+            : 'Image'
+    : '';
+  $: mediaMessages = messages.filter((message) => message.media && !message.deleted);
+  $: profileRows = chat.kind === 'group'
+    ? [
+        ['Participants', String(group?.participantCount ?? chat.participantCount ?? 0)],
+        ['Admins', String(group?.adminCount ?? chat.groupAdminCount ?? 0)],
+        ['Mode', group?.isAnnouncement || chat.groupIsAnnouncement ? 'Announcement' : 'Conversation'],
+        ['Locked', group?.isLocked || chat.groupIsLocked ? 'Yes' : 'No'],
+        ...(group?.creator ? [['Creator', group.creator]] : []),
+        ...(group?.createdAtMs ? [['Created', new Date(group.createdAtMs).toLocaleDateString()]] : [])
+      ]
+    : [
+        ['Phone', contact?.phone ?? chat.id.split('@')[0]],
+        ['About', contact?.about ?? chat.subtitle],
+        ['Account', contact?.isBusiness ? 'Business' : 'Personal'],
+        ...(contact?.lid ? [['LID', contact.lid]] : []),
+        ...(contact?.profileUpdatedAt ? [['Updated', new Date(contact.profileUpdatedAt).toLocaleDateString()]] : [])
+      ];
+  $: participantRows = group?.participants ?? [];
+
+  function participantLabel(participant: { id: string; phoneNumber?: string }): string {
+    if (participant.phoneNumber) return `+${participant.phoneNumber}`;
+    const user = participant.id.split('@')[0]?.split(':')[0] ?? participant.id;
+    return /^\d+$/.test(user) ? `+${user}` : user.includes('@lid') ? 'Unknown contact' : user;
+  }
 </script>
 
 <section class="chat-window" aria-label="Conversation">
   <header>
-    <button class="back" aria-label="Back to chats" on:click={onBack}><span class="material-symbols-rounded">arrow_back</span></button>
+    <button class="back" aria-label="Back to chats" on:click={onBack}><Icon name="arrow-back" /></button>
     <div class:has-image={Boolean(chat.avatarUrl)} class="avatar" style={`background: ${chat.avatarGradient}`}>
       {#if chat.avatarUrl}
         <img src={chat.avatarUrl} alt="" loading="lazy" referrerpolicy="no-referrer" />
@@ -43,12 +106,12 @@
         {chat.title.slice(0, 1)}
       {/if}
     </div>
-    <div>
+    <div class="header-text">
       <h2>{chat.title}</h2>
       <p>{chat.typing ?? groupMetaLabel}</p>
     </div>
-    <button class="icon" aria-label="Video call"><span class="material-symbols-rounded">videocam</span></button>
-    <button class="icon" aria-label="More options"><span class="material-symbols-rounded">more_vert</span></button>
+    <button class="icon" aria-label="Video call"><Icon name="video" /></button>
+    <button class="icon" aria-label="Chat info" on:click={() => (infoOpen = true)}><Icon name="more" /></button>
   </header>
 
   <div class="message-field">
@@ -61,52 +124,186 @@
     {#each visibleMessages as message (message.id)}
       <MessageBubble
         {message}
+        showSenderName={chat.kind === 'group' && !message.fromMe}
         onRetry={() => onRetry(chat.id, message.id)}
         onDownloadMedia={() => onDownloadMedia(chat.id, message.id)}
+        onOpenMedia={openMedia}
       />
     {/each}
   </div>
 
   <ChatComposer on:send={(event) => onSend(chat.id, event.detail)} on:attach={(event) => onAttach(chat.id, event.detail)} />
+
+  {#if infoOpen}
+    <aside class="chat-info" aria-label="Chat info">
+      <header>
+        <button aria-label="Close chat info" on:click={() => (infoOpen = false)}><Icon name="arrow-back" /></button>
+        <strong>Chat info</strong>
+      </header>
+
+      <section class="profile-block">
+        <div class:has-image={Boolean(chat.avatarUrl)} class="profile-avatar" style={`background: ${chat.avatarGradient}`}>
+          {#if chat.avatarUrl}
+            <img src={chat.avatarUrl} alt="" loading="lazy" referrerpolicy="no-referrer" />
+          {:else}
+            {chat.title.slice(0, 1)}
+          {/if}
+        </div>
+        <h3>{chat.title}</h3>
+        <p>{chat.kind === 'group' ? groupMetaLabel : chat.subtitle}</p>
+        {#if chat.kind === 'group' && (group?.description || chat.groupDescription)}
+          <small>{group?.description ?? chat.groupDescription}</small>
+        {:else if chat.kind === 'direct' && contact?.about}
+          <small>{contact.about}</small>
+        {/if}
+      </section>
+
+      <section class="details-section" aria-label="Profile details">
+        {#each profileRows as row}
+          <div>
+            <span>{row[0]}</span>
+            <strong>{row[1]}</strong>
+          </div>
+        {/each}
+      </section>
+
+      {#if chat.kind === 'group'}
+        <section class="participants-section" aria-label="Group participants">
+          <div class="section-title">
+            <strong>Participants</strong>
+            <span>{participantRows.length}</span>
+          </div>
+          {#if participantRows.length === 0}
+            <p class="empty-media">Participant list has not synced yet.</p>
+          {:else}
+            <div class="participant-list">
+              {#each participantRows as participant (participant.id)}
+                <div>
+                  <span>{participantLabel(participant)}</span>
+                  {#if participant.isAdmin}
+                    <small>Admin</small>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </section>
+      {/if}
+
+      <section class="media-section">
+        <div class="section-title">
+          <strong>Media</strong>
+          <span>{mediaMessages.length}</span>
+        </div>
+
+        {#if mediaMessages.length === 0}
+          <p class="empty-media">No media in this chat yet.</p>
+        {:else}
+          <div class="media-grid">
+            {#each mediaMessages as message (message.id)}
+              <button class="media-tile" type="button" on:click={() => handleMediaGridClick(message)}>
+                {#if message.media?.previewUrl || message.media?.cachedDataUrl}
+                  {#if message.media.kind === 'video'}
+                    <video src={message.media.cachedDataUrl ?? message.media.previewUrl} muted playsinline preload="metadata">
+                      <track kind="captions" />
+                    </video>
+                  {:else}
+                    <img src={message.media.cachedDataUrl ?? message.media.previewUrl} alt={message.media.name} />
+                  {/if}
+                {:else}
+                  <span>{message.media?.kind === 'document' ? 'DOC' : message.media?.kind.toUpperCase()}</span>
+                {/if}
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </section>
+    </aside>
+  {/if}
+
+  {#if selectedMediaMessage?.media}
+    <div class="media-viewer" role="dialog" aria-modal="true" aria-label={selectedMediaMessage.media.name}>
+      <header>
+        <strong>{viewerTitle}</strong>
+        <button aria-label="Close media viewer" on:click={closeMedia}>×</button>
+      </header>
+
+      <div class="media-viewer__body">
+        {#if selectedMediaMessage.media.kind === 'image' && (selectedMediaMessage.media.cachedDataUrl || selectedMediaMessage.media.previewUrl)}
+          <img
+            src={selectedMediaMessage.media.cachedDataUrl ?? selectedMediaMessage.media.previewUrl}
+            alt={selectedMediaMessage.media.name}
+            style={`transform: scale(${imageZoom})`}
+          />
+        {:else if selectedMediaMessage.media.kind === 'video' && selectedMediaMessage.media.cachedDataUrl}
+          <video src={selectedMediaMessage.media.cachedDataUrl} controls autoplay playsinline>
+            <track kind="captions" />
+          </video>
+        {:else if selectedMediaMessage.media.kind === 'sticker' && (selectedMediaMessage.media.cachedDataUrl || selectedMediaMessage.media.previewUrl)}
+          <img src={selectedMediaMessage.media.cachedDataUrl ?? selectedMediaMessage.media.previewUrl} alt="Sticker" />
+        {:else if selectedMediaMessage.media.kind === 'audio' && selectedMediaMessage.media.cachedDataUrl}
+          <audio src={selectedMediaMessage.media.cachedDataUrl} controls autoplay></audio>
+        {:else if selectedMediaMessage.media.cachedDataUrl}
+          <a class="document-open" href={selectedMediaMessage.media.cachedDataUrl} download={selectedMediaMessage.media.name}>
+            Open {selectedMediaMessage.media.name}
+          </a>
+        {:else}
+          <p>Download the media first to preview it here.</p>
+        {/if}
+      </div>
+
+      {#if selectedMediaMessage.media.kind === 'image'}
+        <footer>
+          <button on:click={() => (imageZoom = Math.max(1, imageZoom - 0.25))}>−</button>
+          <span>{Math.round(imageZoom * 100)}%</span>
+          <button on:click={() => (imageZoom = Math.min(3, imageZoom + 0.25))}>+</button>
+        </footer>
+      {/if}
+    </div>
+  {/if}
 </section>
 
 <style>
   .chat-window {
+    position: relative;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto 1fr auto;
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    min-width: 0;
     min-height: 0;
     overflow: hidden;
-    background-color: var(--app-bg, #efe7dd);
-    background-image: 
-      linear-gradient(var(--app-bg), var(--app-bg)),
-      radial-gradient(circle at 20% 20%, rgba(0, 128, 105, 0.09), transparent 24%),
-      radial-gradient(circle at 70% 76%, rgba(0, 0, 0, 0.06), transparent 22%);
+    background-color: var(--app-bg);
   }
 
   header {
     display: grid;
-    grid-template-columns: auto auto 1fr auto auto;
+    grid-template-columns: auto auto minmax(0, 1fr) auto auto;
     align-items: center;
     gap: 8px;
-    padding: calc(9px + var(--safe-top, 0px)) 8px 9px;
-    color: var(--ink, #101f1b);
-    background: var(--paper, #fbfbf6);
-    border-bottom: 1px solid var(--border-color, #edf0eb);
+    padding: calc(10px + var(--safe-top, 0px)) 12px 10px 4px;
+    color: var(--ink);
+    background: var(--paper);
+    border-bottom: 1px solid var(--border-color);
+    width: 100%;
+    min-width: 0;
   }
 
   .avatar {
     display: grid;
     place-items: center;
-    width: 38px;
-    height: 38px;
-    border-radius: 999px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
     color: white;
-    font-weight: 950;
+    font-weight: 500;
     overflow: hidden;
   }
 
   .avatar.has-image {
-    background: #dfe5e1 !important;
+    background: var(--border-color) !important;
   }
 
   .avatar img {
@@ -115,22 +312,32 @@
     object-fit: cover;
   }
 
+  .header-text {
+    min-width: 0;
+  }
+
   h2,
   p {
     margin: 0;
   }
 
   h2 {
-    color: var(--ink, #101f1b);
-    font-size: 0.96rem;
-    font-weight: 850;
+    color: var(--ink);
+    font-size: 1.1rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   header p {
-    margin-top: 1px;
-    color: var(--muted, #667781);
-    font-size: 0.74rem;
-    font-weight: 650;
+    margin-top: 2px;
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-weight: 400;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   header button {
@@ -138,53 +345,378 @@
     align-items: center;
     justify-content: center;
     border: 0;
-    color: var(--ink, #101f1b);
+    border-radius: 50%;
+    color: var(--ink);
     background: transparent;
+    cursor: pointer;
   }
 
   .back {
-    width: 32px;
-    height: 38px;
-    font-size: 2rem;
-    line-height: 1;
+    width: 40px;
+    height: 40px;
+    font-size: 1.5rem;
+    margin-right: -4px;
   }
 
   .icon {
-    width: 34px;
-    height: 38px;
-    font-size: 1.15rem;
+    width: 40px;
+    height: 40px;
+    font-size: 1.25rem;
   }
 
   .message-field {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     align-content: start;
-    gap: 10px;
+    gap: 4px;
+    min-width: 0;
     min-height: 0;
+    width: 100%;
     overflow-y: auto;
-    padding: 14px 10px 12px;
+    overflow-x: hidden;
+    padding: 16px 16px 12px;
   }
 
   .day-chip {
     justify-self: center;
     padding: 6px 12px;
-    border-radius: 999px;
-    color: #667781;
-    font-size: 0.74rem;
-    font-weight: 850;
-    background: rgba(255, 255, 255, 0.72);
+    border-radius: 8px;
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: var(--paper);
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+    margin: 8px 0;
   }
 
   .load-older {
     justify-self: center;
     min-height: 34px;
     border: 0;
-    border-radius: 999px;
-    padding: 0 13px;
-    color: #075e54;
+    border-radius: 8px;
+    padding: 0 16px;
+    color: var(--wa-green-dark);
     font: inherit;
-    font-size: 0.78rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    background: var(--paper);
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+    cursor: pointer;
+    margin-bottom: 8px;
+  }
+
+  .chat-info {
+    position: absolute;
+    inset: 0;
+    z-index: 24;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+    color: var(--ink);
+    background: var(--app-bg);
+  }
+
+  .chat-info header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: calc(12px + var(--safe-top, 0px)) 16px 12px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--paper);
+    flex-shrink: 0;
+  }
+
+  .chat-info header strong {
+    font-size: 1.25rem;
+    font-weight: 500;
+  }
+
+  .chat-info header button {
+    width: 40px;
+    height: 40px;
+    border: 0;
+    border-radius: 50%;
+    color: var(--ink);
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .profile-block {
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    padding: 24px 16px 20px;
+    text-align: center;
+    border-bottom: 8px solid var(--app-bg);
+    background: var(--paper);
+    flex-shrink: 0;
+  }
+
+  .profile-avatar {
+    display: grid;
+    place-items: center;
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    overflow: hidden;
+    color: white;
+    font-size: 3rem;
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+
+  .profile-avatar.has-image {
+    background: var(--border-color) !important;
+  }
+
+  .profile-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .profile-block h3,
+  .profile-block p,
+  .profile-block small {
+    margin: 0;
+  }
+
+  .profile-block h3 {
+    font-size: 1.4rem;
+    font-weight: 400;
+  }
+
+  .profile-block p {
+    font-size: 1rem;
+    color: var(--muted);
+  }
+
+  .profile-block small,
+  .empty-media {
+    color: var(--muted);
+  }
+
+  .details-section {
+    display: flex;
+    flex-direction: column;
+    padding: 8px 0;
+    border-bottom: 8px solid var(--app-bg);
+    background: var(--paper);
+    flex-shrink: 0;
+  }
+
+  .details-section div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 24px;
+    background: transparent;
+  }
+
+  .details-section span {
+    color: var(--muted);
+    font-size: 0.875rem;
+    font-weight: 400;
+  }
+
+  .details-section strong {
+    overflow-wrap: anywhere;
+    color: var(--ink);
+    font-size: 1.05rem;
+    font-weight: 400;
+  }
+
+  .media-section {
+    display: grid;
+    align-content: start;
+    gap: 16px;
+    padding: 16px 16px 24px;
+    border-bottom: 8px solid var(--app-bg);
+    background: var(--paper);
+    flex-shrink: 0;
+  }
+
+  .participants-section {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+    border-bottom: 8px solid var(--app-bg);
+    background: var(--paper);
+    flex-shrink: 0;
+  }
+
+  .participant-list {
+    display: grid;
+    gap: 8px;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+
+  .participant-list div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 42px;
+    padding: 8px 10px;
+    border-radius: 14px;
+    background: var(--nav-active, #eef2ee);
+  }
+
+  .participant-list span {
+    overflow: hidden;
+    color: var(--ink, #101f1b);
+    font-size: 0.88rem;
+    font-weight: 850;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .participant-list small {
+    flex: 0 0 auto;
+    border-radius: 999px;
+    padding: 4px 8px;
+    color: var(--wa-green-dark, #075e54);
+    font-size: 0.72rem;
+    font-weight: 950;
+    background: color-mix(in srgb, var(--wa-green, #25d366) 18%, transparent);
+  }
+
+  .section-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--ink);
+  }
+
+  .section-title strong {
+    font-size: 0.95rem;
+    font-weight: 500;
+  }
+
+  .section-title span {
+    color: var(--muted);
+    font-size: 0.875rem;
+  }
+
+  .media-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .media-tile {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1;
+    border: 0;
+    border-radius: 8px;
+    overflow: hidden;
+    color: white;
+    font: inherit;
+    font-weight: 600;
+    background: var(--border-color);
+    cursor: pointer;
+  }
+
+  .media-tile img,
+  .media-tile video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .media-tile span {
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: var(--wa-green-dark);
+    font-size: 0.8rem;
+    font-weight: 500;
+  }
+
+  .media-viewer {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    color: #f7fff6;
+    background: rgba(0, 0, 0, 0.94);
+  }
+
+  .media-viewer header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    padding: calc(12px + var(--safe-top, 0px)) 14px 12px;
+    background: rgba(0, 0, 0, 0.32);
+    border: 0;
+  }
+
+  .media-viewer header strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .media-viewer header button,
+  .media-viewer footer button {
+    border: 0;
+    border-radius: 999px;
+    color: #f7fff6;
+    background: rgba(255, 255, 255, 0.14);
+  }
+
+  .media-viewer header button {
+    width: 38px;
+    height: 38px;
+    font-size: 1.4rem;
+  }
+
+  .media-viewer__body {
+    display: grid;
+    place-items: center;
+    min-height: 0;
+    overflow: auto;
+    padding: 16px;
+  }
+
+  .media-viewer__body img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    transition: transform 160ms ease;
+  }
+
+  .media-viewer__body video {
+    width: 100%;
+    max-height: 100%;
+  }
+
+  .document-open {
+    color: #d9fdd3;
     font-weight: 900;
-    background: rgba(255, 255, 255, 0.78);
-    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+  }
+
+  .media-viewer footer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px max(14px, var(--safe-bottom, 0px));
+  }
+
+  .media-viewer footer button {
+    width: 42px;
+    height: 42px;
+    font-size: 1.4rem;
   }
 </style>
