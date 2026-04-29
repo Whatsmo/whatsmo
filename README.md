@@ -68,7 +68,6 @@ Legend:
 - [x] APK install helper (`bun run android:install`)
 - [x] GitHub Actions workflow that builds and uploads the release-test APK artifact
 - [x] MIT license
-- [x] Private GitHub repository setup
 
 ### Authentication and session lifecycle
 
@@ -111,7 +110,7 @@ Legend:
 - [x] Auto-sync contact profiles from incoming and history-synced message JIDs
 - [ ] Full address-book/contact import from the Android device
 - [x] Automatic contact refresh from WhatsApp contact/profile update events
-- [ ] Rich contact profile screen with business/status/about fields from WhatsApp
+- [x] Rich contact/group profile drawer with business/about/LID/group metadata and media grid
 - [x] Contact number-change migration handling for chats, messages, selected chat, and contacts
 
 ### Status / Updates
@@ -124,8 +123,8 @@ Legend:
 - [x] Status revoke command through `client.status().revoke`
 - [x] Image status upload command through `client.upload(..., MediaType::Image)` and `client.status().send_image`
 - [x] Video status upload command through `client.upload(..., MediaType::Video)` and `client.status().send_video`
-- [ ] Partial: image status thumbnail generation is basic and should be replaced with real JPEG thumbnail creation
-- [ ] Partial: video status works only when the user provides a JPEG thumbnail manually
+- [x] Image status thumbnail generation with local JPEG thumbnail creation
+- [x] Video status thumbnail generation with automatic JPEG thumbnail fallback
 - [ ] Status feed/viewer for contacts' statuses
 - [ ] Status reactions: documented upstream, but `whatsapp-rust 0.5.0` currently does not expose `client.status().send_reaction`
 - [ ] Status message event parsing with server IDs for reactions/viewer actions
@@ -134,9 +133,12 @@ Legend:
 
 - [x] Chat image/video/document upload and send through `client.upload(...)` + `client.send_message(...)`
 - [x] Incoming image/video/document download/decryption and small local preview cache
-- [ ] Media preview grid for chats and profiles
-- [x] Android/WebView file picker integration for chat attachments
-- [ ] Thumbnail generation pipeline for images/videos
+- [x] Media preview grid in chat profile/info drawer for cached images, videos, and documents
+- [x] Sticker send/render/download support for WebP sticker attachments
+- [x] Audio/PTT voice-message recording and sending
+- [x] In-app attachment sheet for image, video, document, and sticker choices
+- [x] Attachment preview composer with caption and image/video view-once option before sending
+- [x] Thumbnail generation pipeline for outgoing chat image/video previews and Status media thumbnails
 - [x] File size/type validation before upload
 
 ### Notifications and background behavior
@@ -144,9 +146,9 @@ Legend:
 - [x] Tauri notification permission flow
 - [x] Foreground local notification call for incoming messages
 - [ ] Real push/background notifications while the app is closed
-- [ ] Android foreground service or background worker for session keepalive, if feasible
-- [ ] Notification tap routing into the correct chat
-- [ ] Per-chat mute/archive/pin behavior backed by persisted state
+- [x] Android foreground service foundation for companion session keepalive
+- [x] Notification tap routing into the correct chat for foreground/local message notifications
+- [x] Per-chat mute/archive/pin/read-unread behavior backed by persisted state and Android-style long-press actions
 
 ### Mobile UI / UX
 
