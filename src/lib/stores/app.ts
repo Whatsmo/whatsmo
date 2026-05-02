@@ -441,10 +441,15 @@ export function handleContactUpdated(payload: ContactUpdatedPayload): void {
 function applySenderPushName(senderId: string, pushName: string, timestampMs: number): void {
   appState.update((state) => {
     const existing = state.contacts.find((contact) => contact.id === senderId || contact.lid === senderId);
+
+    // Don't overwrite a good name with a pushName if the contact already has a proper resolved name
+    const existingHasGoodName = existing && existing.name && !isRawIdentifierName(existing.name);
+    const resolvedName = existingHasGoodName ? existing.name : pushName;
+
     const profile: ContactProfile = {
       ...(existing ?? contactFromJid(senderId)),
       id: existing?.id ?? senderId,
-      name: pushName,
+      name: resolvedName,
       profileUpdatedAt: timestampMs
     };
     const contacts = upsertContacts(state.contacts, [profile]);
@@ -454,7 +459,7 @@ function applySenderPushName(senderId: string, pushName: string, timestampMs: nu
       messages: updateMessageSenderNames(state.messages, contacts),
       chats: sortChats(
         state.chats.map((chat) =>
-          chat.id === senderId || chat.id === existing?.id ? { ...chat, title: pushName } : chat
+          chat.id === senderId || chat.id === existing?.id ? { ...chat, title: resolvedName } : chat
         )
       )
     };
@@ -721,7 +726,7 @@ export function ingestIncomingMessage(payload: IncomingMessagePayload): void {
 
   const state = get(appState);
   const chat = state.chats.find((item) => item.id === payload.chatId);
-  if (state.notificationEnabled && chat && !payload.fromMe) {
+  if (state.notificationEnabled && chat && !payload.fromMe && !chat.muted) {
     notifyNewMessage(chat.title, payload.text ?? 'New WhatsApp message', payload.chatId);
   }
 }
