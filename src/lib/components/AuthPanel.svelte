@@ -4,6 +4,7 @@
   import type { AccountDevicePayload, AuthPayload } from '$lib/api/types';
   import { disconnectSession, logoutSession, requestPairCode, startQrAuth } from '$lib/api/whatsmo';
   import { refreshAccountDevice, requestNotifications, setAuth, setConnection } from '$lib/stores/app';
+  import Icon from './Icon.svelte';
 
   export let auth: AuthPayload;
   export let account: AccountDevicePayload | null = null;
@@ -86,12 +87,32 @@
       busy = false;
     }
   }
+
+  function resetAuth(): void {
+    setAuth({ mode: 'idle' });
+  }
 </script>
 
-<section class:connected={auth.mode === 'connected'} class="auth-strip" aria-label="WhatsApp pairing">
-  <div class="link-icon" aria-hidden="true">⌁</div>
+<section class:connected={auth.mode === 'connected'} class:error={auth.mode === 'error'} class="auth-strip" aria-label="WhatsApp pairing">
+  <div class="link-icon" aria-hidden="true">
+    {#if auth.mode === 'error'}
+      <Icon name="error_outline" />
+    {:else if auth.mode === 'connecting' || busy}
+      <span class="spinner"></span>
+    {:else}
+      ⌁
+    {/if}
+  </div>
   <div class="auth-copy">
-    <strong>{auth.mode === 'connected' ? 'Linked device active' : 'Link this device'}</strong>
+    <strong>
+      {#if auth.mode === 'error'}
+        Pairing failed
+      {:else if auth.mode === 'connecting'}
+        Connecting
+      {:else}
+        {auth.mode === 'connected' ? 'Linked device active' : 'Link this device'}
+      {/if}
+    </strong>
     <span>{auth.message ?? 'Use QR or phone pairing to connect WhatsApp.'}</span>
   </div>
 
@@ -129,7 +150,11 @@
       <button class="secondary-button" disabled={busy} on:click={disconnectLocal}>Stop locally</button>
       <button class="danger-button" disabled={busy} on:click={unlinkDevice}>Unlink</button>
     </div>
-  {:else}
+  {:else if auth.mode === 'error'}
+    <div class="auth-controls">
+      <button class="secondary-button" on:click={resetAuth}>Try again</button>
+    </div>
+  {:else if auth.mode !== 'connecting'}
     <div class="auth-controls">
       <button class="qr-button" disabled={busy} on:click={beginQr}>QR</button>
       <div class="phone-entry">
@@ -172,6 +197,14 @@
     background: var(--auth-bg, #d9fdd3);
   }
 
+  .auth-strip.error {
+    background: #fce8e6;
+  }
+
+  .auth-strip.error .link-icon {
+    background: #ea4335;
+  }
+
   .link-icon {
     display: grid;
     place-items: center;
@@ -181,6 +214,21 @@
     color: white;
     font-weight: 900;
     background: var(--wa-green, #008069);
+  }
+
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .auth-copy {

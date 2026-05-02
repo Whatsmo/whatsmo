@@ -250,6 +250,7 @@
           {#if activeScreen === 'chats'}
             <ChatList
               chats={$appState.chats}
+              historySync={$appState.historySync}
               selectedChatId={$appState.selectedChatId}
               onSelect={openChat}
               onToggleArchive={toggleChatArchived}
@@ -260,7 +261,7 @@
           {:else if activeScreen === 'settings'}
             <SettingsPanel />
           {:else}
-            <StatusPanel auth={$appState.auth} contacts={$appState.contacts} />
+            <StatusPanel auth={$appState.auth} contacts={$appState.contacts} statuses={$appState.statuses} />
           {/if}
         </div>
 

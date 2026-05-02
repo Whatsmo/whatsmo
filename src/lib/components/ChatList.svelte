@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { ChatSummary } from '$lib/api/types';
+  import type { ChatSummary, HistorySyncProgressPayload } from '$lib/api/types';
   import Icon from './Icon.svelte';
 
   export let chats: ChatSummary[] = [];
+  export let historySync: HistorySyncProgressPayload | null = null;
   export let selectedChatId = '';
   export let onSelect: (chatId: string) => void;
   export let onTogglePin: (chatId: string) => void = () => undefined;
@@ -24,6 +25,8 @@
 
   $: normalizedQuery = query.trim().toLowerCase();
   $: filteredChats = chats.filter((chat) => {
+    if (chat.id === 'status@broadcast') return false;
+
     const matchesFilter =
       (activeFilter === 'all' && !chat.archived) ||
       (activeFilter === 'unread' && !chat.archived && chat.unreadCount > 0) ||
@@ -43,6 +46,7 @@
     chats.length === 0
       ? 'Keep Whatsmo open after pairing. New incoming and outgoing messages will appear here.'
       : 'Try a different search or filter.';
+  $: isSyncingHistory = historySync?.active === true;
 
   onMount(() => {
     const handlePopState = () => {
@@ -109,7 +113,19 @@
   </div>
 
   <div class="chat-list__items">
-    {#if filteredChats.length === 0}
+    {#if isSyncingHistory && chats.length === 0}
+      <div class="skeleton-list" aria-label="Loading chats">
+        {#each Array(6) as _}
+          <div class="skeleton-row">
+            <div class="skeleton-avatar"></div>
+            <div class="skeleton-lines">
+              <div class="skeleton-line-title"></div>
+              <div class="skeleton-line-subtitle"></div>
+            </div>
+          </div>
+        {/each}
+      </div>
+    {:else if filteredChats.length === 0}
       <div class="empty-chats">
         <div aria-hidden="true"><Icon name="chat" size="2rem" /></div>
         <strong>{emptyTitle}</strong>
@@ -277,6 +293,55 @@
     max-width: 240px;
     margin: 0;
     line-height: 1.42;
+  }
+
+  .skeleton-list {
+    display: grid;
+    gap: 16px;
+    padding: 12px 16px;
+  }
+
+  .skeleton-row {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 16px;
+    align-items: center;
+  }
+
+  .skeleton-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: var(--border-color);
+    animation: pulse 1.5s infinite ease-in-out;
+  }
+
+  .skeleton-lines {
+    display: grid;
+    gap: 10px;
+  }
+
+  .skeleton-line-title {
+    height: 16px;
+    width: 40%;
+    border-radius: 8px;
+    background: var(--border-color);
+    animation: pulse 1.5s infinite ease-in-out;
+  }
+
+  .skeleton-line-subtitle {
+    height: 14px;
+    width: 70%;
+    border-radius: 7px;
+    background: var(--border-color);
+    animation: pulse 1.5s infinite ease-in-out;
+    opacity: 0.6;
+  }
+
+  @keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.4; }
+    100% { opacity: 1; }
   }
 
   .chat-row {
