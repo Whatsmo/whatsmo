@@ -99,6 +99,7 @@ Legend:
 - [x] Message edit and delete/revoke handling for live message events
 - [ ] Quoted replies, reactions, forwarded labels, polls, location, contacts, and stickers
 - [x] Text-message offline queue/retry for failed or queued outgoing messages
+- [ ] Send message with custom disappearing duration
 
 ### Contacts and profiles
 
@@ -162,6 +163,10 @@ Legend:
 - [x] Better onboarding/error states for failed pair-code or QR flows
 - [ ] Accessibility pass: labels, focus order, contrast, larger text support
 - [x] Loading skeletons and progress indicators for network-heavy operations
+
+### Advanced Features
+
+- [ ] Plugin support: app should support plugins (template/API to be provided later)
 
 ### Security, reliability, and release quality
 
