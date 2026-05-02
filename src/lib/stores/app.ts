@@ -188,6 +188,7 @@ const messages: Record<string, ChatMessage[]> = {
 interface PersistedAppData {
   chats: ChatSummary[];
   messages: Record<string, ChatMessage[]>;
+  statuses: Record<string, ChatMessage[]>;
   contacts: ContactProfile[];
   groups: Record<string, GroupMetadataPayload>;
   selectedChatId: string;
@@ -201,6 +202,7 @@ if (typeof window !== 'undefined') {
     const persisted: PersistedAppData = {
       chats: state.chats,
       messages: trimPersistedMessages(state.messages),
+      statuses: trimPersistedStatuses(state.statuses),
       contacts: state.contacts,
       groups: state.groups,
       selectedChatId: state.selectedChatId,
@@ -702,6 +704,15 @@ export function ingestIncomingMessage(payload: IncomingMessagePayload): void {
     media: normalizeMediaAttachment(payload.media)
   };
 
+  if (payload.chatId === 'status@broadcast') {
+    appendStatus(message);
+    if (payload.senderName && !isRawIdentifierName(payload.senderName)) {
+      applySenderPushName(payload.senderId, payload.senderName, payload.timestampMs);
+    }
+    scheduleContactProfileSync([payload.senderId]);
+    return;
+  }
+
   appendMessage(message);
   if (payload.senderName && !isRawIdentifierName(payload.senderName)) {
     applySenderPushName(payload.senderId, payload.senderName, payload.timestampMs);
@@ -763,6 +774,24 @@ function applyMessageRevoke(payload: IncomingMessagePayload): void {
 
 export function ingestHistorySync(payload: HistorySyncPayload): void {
   const historyMessages = payload.messages.map(messageFromIncomingPayload);
+
+  if (payload.chatId === 'status@broadcast') {
+    appState.update((state) => {
+      const statuses = { ...state.statuses };
+      for (const msg of historyMessages) {
+        const existing = statuses[msg.senderId] ?? [];
+        if (!existing.some((item) => item.id === msg.id)) {
+          statuses[msg.senderId] = [...existing, msg];
+        }
+      }
+      return {
+        ...state,
+        statuses: trimPersistedStatuses(statuses)
+      };
+    });
+    scheduleContactProfileSync(collectContactJidsFromHistory(payload));
+    return;
+  }
 
   appState.update((state) => {
     const existingMessages = state.messages[payload.chatId] ?? [];
@@ -974,6 +1003,26 @@ function appendMessage(message: ChatMessage): void {
   });
 }
 
+function appendStatus(message: ChatMessage): void {
+  appState.update((state) => {
+    const existingStatuses = state.statuses[message.senderId] ?? [];
+    if (existingStatuses.some((item) => item.id === message.id)) {
+      return state;
+    }
+
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const activeStatuses = [...existingStatuses, message].filter((item) => item.timestamp > cutoff);
+
+    return {
+      ...state,
+      statuses: {
+        ...state.statuses,
+        [message.senderId]: activeStatuses
+      }
+    };
+  });
+}
+
 function messageFromIncomingPayload(payload: IncomingMessagePayload): ChatMessage {
   const state = get(appState);
   return {
@@ -1142,6 +1191,7 @@ function createInitialState(): AppModel {
       historySync: null,
       chats: persisted.chats,
       messages: persisted.messages,
+      statuses: persisted.statuses,
       contacts: persisted.contacts,
       groups: persisted.groups,
       selectedChatId: persisted.selectedChatId,
@@ -1161,6 +1211,7 @@ function createInitialState(): AppModel {
     historySync: null,
     chats: shouldSeedPreview ? chats : [],
     messages: shouldSeedPreview ? messages : {},
+    statuses: {},
     contacts: shouldSeedPreview ? contacts : [],
     groups: {},
     selectedChatId: shouldSeedPreview ? chats[0]?.id ?? '' : '',
@@ -1191,6 +1242,7 @@ function loadPersistedState(): PersistedAppData | null {
 
     const chatsValue = parsed.chats;
     const messagesValue = parsed.messages;
+    const statusesValue = parsed.statuses;
     const contactsValue = parsed.contacts;
     const groupsValue = parsed.groups;
     const selectedChatIdValue = parsed.selectedChatId;
@@ -1213,9 +1265,19 @@ function loadPersistedState(): PersistedAppData | null {
       }
     }
 
+    const statusesBySender: Record<string, ChatMessage[]> = {};
+    if (isRecord(statusesValue)) {
+      for (const [senderId, senderStatuses] of Object.entries(statusesValue)) {
+        if (Array.isArray(senderStatuses)) {
+          statusesBySender[senderId] = senderStatuses as ChatMessage[];
+        }
+      }
+    }
+
     return {
       chats: chatsValue as ChatSummary[],
       messages: messagesByChat,
+      statuses: statusesBySender,
       contacts: contactsValue as ContactProfile[],
       groups: (groupsValue as Record<string, GroupMetadataPayload> | undefined) ?? {},
       selectedChatId: selectedChatIdValue,
@@ -1233,6 +1295,18 @@ function trimPersistedMessages(source: Record<string, ChatMessage[]>): Record<st
       chatId,
       chatMessages.slice(-MAX_PERSISTED_MESSAGES_PER_CHAT)
     ])
+  );
+}
+
+function trimPersistedStatuses(source: Record<string, ChatMessage[]>): Record<string, ChatMessage[]> {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  return Object.fromEntries(
+    Object.entries(source)
+      .map(([senderId, statuses]) => [
+        senderId,
+        statuses.filter((status) => status.timestamp > cutoff)
+      ])
+      .filter(([_, statuses]) => statuses.length > 0)
   );
 }
 

@@ -102,6 +102,16 @@ export interface ChatSummary {
   typing?: string;
 }
 
+export interface StatusSummary {
+  senderId: string;
+  name: string;
+  avatarGradient: string;
+  avatarUrl?: string;
+  lastUpdatedAt: number;
+  unreadCount: number;
+  items: ChatMessage[];
+}
+
 export interface GroupParticipantProfile {
   id: string;
   phoneNumber?: string;
@@ -244,6 +254,7 @@ export interface AppModel {
   historySync: HistorySyncProgressPayload | null;
   chats: ChatSummary[];
   messages: Record<string, ChatMessage[]>;
+  statuses: Record<string, ChatMessage[]>;
   contacts: ContactProfile[];
   groups: Record<string, GroupMetadataPayload>;
   selectedChatId: string;

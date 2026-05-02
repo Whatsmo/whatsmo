@@ -1,6 +1,7 @@
 <script lang="ts">
-  import type { AuthPayload, ContactProfile, StatusPostPayload, StatusPrivacy } from '$lib/api/types';
+  import type { AuthPayload, ContactProfile, StatusPostPayload, StatusPrivacy, ChatMessage } from '$lib/api/types';
   import Icon from './Icon.svelte';
+  import StatusViewer from './StatusViewer.svelte';
   import {
     revokeStatus,
     sendImageStatus,
@@ -14,6 +15,7 @@
 
   export let auth: AuthPayload;
   export let contacts: ContactProfile[] = [];
+  export let statuses: Record<string, ChatMessage[]> = {};
 
   type Mode = 'text' | 'image' | 'video' | 'raw' | 'revoke' | 'react';
 
@@ -62,10 +64,34 @@
   let lastPost: StatusPostPayload | null = null;
   let errorMessage = '';
   let isComposing = false;
+  let activeViewerSenderId: string | null = null;
 
   $: userContacts = contacts.filter((contact) => contact.id.includes('@s.whatsapp.net'));
   $: canUseStatusRecipients = mode !== 'react';
   $: canSubmit = auth.mode === 'connected' && !busy && mode !== 'react' && hasRequiredInput();
+
+  $: recentUpdates = Object.entries(statuses)
+    .filter(([senderId, items]) => items.length > 0 && senderId !== 'me')
+    .map(([senderId, items]) => {
+      const contact = contacts.find(c => c.id === senderId || c.lid === senderId);
+      return {
+        senderId,
+        contact,
+        items,
+        lastTimestamp: Math.max(...items.map(i => i.timestamp))
+      };
+    })
+    .sort((a, b) => b.lastTimestamp - a.lastTimestamp);
+
+  $: myStatuses = statuses['me'] ?? [];
+
+  $: activeViewerStatuses = activeViewerSenderId ? statuses[activeViewerSenderId] ?? [] : [];
+  $: activeViewerContactName = activeViewerSenderId
+    ? (activeViewerSenderId === 'me' ? 'My status' : contacts.find(c => c.id === activeViewerSenderId || c.lid === activeViewerSenderId)?.name ?? 'Unknown contact')
+    : '';
+  $: activeViewerGradient = activeViewerSenderId
+    ? contacts.find(c => c.id === activeViewerSenderId || c.lid === activeViewerSenderId)?.avatarGradient ?? 'linear-gradient(135deg, #25d366, #128c7e)'
+    : '';
 
   function hasRequiredInput(): boolean {
     if (mode === 'react') {
@@ -197,42 +223,57 @@
   </div>
 
   <div class="status-row">
-    <button class="status-item my-status" type="button" on:click={() => (isComposing = true)}>
+    <button class="status-item my-status" type="button" on:click={() => myStatuses.length > 0 ? (activeViewerSenderId = 'me') : (isComposing = true)}>
       <div class="avatar-wrapper">
         <div class="avatar my-avatar">
           <Icon name="person" />
         </div>
-        <div class="add-badge">
-          <Icon name="add" size="14px" />
-        </div>
+        {#if myStatuses.length > 0}
+          <svg class="status-ring" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="48" fill="none" stroke="var(--muted, #667781)" stroke-width="4" stroke-linecap="round" />
+          </svg>
+        {:else}
+          <div class="add-badge">
+            <Icon name="add" size="14px" />
+          </div>
+        {/if}
       </div>
       <span class="status-name">My status</span>
     </button>
-    
-    {#each userContacts.slice(0, 5) as contact (contact.id)}
-      <div class="status-item">
-        <div class="avatar-wrapper">
-          <div class="avatar contact-avatar" style={`background: ${contact.avatarGradient}`}>
-            {#if contact.avatarUrl}
-              <img src={contact.avatarUrl} alt="" loading="lazy" referrerpolicy="no-referrer" />
-            {:else}
-              {contact.name.slice(0, 1)}
-            {/if}
-          </div>
-          <svg class="status-ring" viewBox="0 0 100 100">
-            <circle cx="50" cy="50" r="48" fill="none" stroke="var(--wa-green, #008069)" stroke-width="4" stroke-dasharray="80 20" stroke-linecap="round" />
-          </svg>
-        </div>
-        <span class="status-name">{contact.name.split(' ')[0]}</span>
-      </div>
-    {/each}
   </div>
 
   <hr class="divider" />
   
   <div class="recent-updates">
     <h3>Recent updates</h3>
-    <p class="muted-text">No recent updates right now.</p>
+    {#if recentUpdates.length === 0}
+      <p class="muted-text">No recent updates right now.</p>
+    {:else}
+      <div class="updates-list">
+        {#each recentUpdates as update (update.senderId)}
+          <button class="update-item" on:click={() => activeViewerSenderId = update.senderId}>
+            <div class="avatar-wrapper">
+              <div class="avatar contact-avatar" style={`background: ${update.contact?.avatarGradient ?? 'var(--muted)'}`}>
+                {#if update.contact?.avatarUrl}
+                  <img src={update.contact.avatarUrl} alt="" loading="lazy" referrerpolicy="no-referrer" />
+                {:else}
+                  {(update.contact?.name ?? 'U').slice(0, 1)}
+                {/if}
+              </div>
+              <svg class="status-ring" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="48" fill="none" stroke="var(--wa-green, #008069)" stroke-width="4" stroke-dasharray={update.items.length > 1 ? "80 20" : "300"} stroke-linecap="round" />
+              </svg>
+            </div>
+            <div class="update-info">
+              <span class="status-name">{update.contact?.name ?? update.senderId}</span>
+              <span class="status-time">
+                {new Intl.DateTimeFormat('en', { hour: '2-digit', minute: '2-digit' }).format(new Date(update.lastTimestamp))}
+              </span>
+            </div>
+          </button>
+        {/each}
+      </div>
+    {/if}
   </div>
 
   <div class="fab-container">
@@ -402,6 +443,15 @@
   </div>
 {/if}
 
+{#if activeViewerSenderId}
+  <StatusViewer 
+    statuses={activeViewerStatuses} 
+    contactName={activeViewerContactName}
+    avatarGradient={activeViewerGradient}
+    on:close={() => (activeViewerSenderId = null)} 
+  />
+{/if}
+
 <style>
   .status-panel {
     display: flex;
@@ -548,6 +598,41 @@
     font-size: 0.95rem;
     color: var(--muted, #667781);
     margin: 0 0 12px 0;
+  }
+
+  .updates-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .update-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .update-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .update-info .status-name {
+    font-size: 1rem;
+    font-weight: 500;
+    text-align: left;
+  }
+
+  .status-time {
+    font-size: 0.85rem;
+    color: var(--muted, #667781);
   }
 
   .muted-text {
