@@ -16,6 +16,7 @@
   $: mediaSource = message.media?.cachedDataUrl ?? message.media?.previewUrl;
   $: isPreviewOnly = Boolean(message.media?.previewUrl && !message.media.cachedDataUrl && !message.fromMe);
   $: isVisualMedia = message.media?.kind === 'image' || message.media?.kind === 'video' || message.media?.kind === 'sticker';
+  $: isSticker = message.media?.kind === 'sticker';
   $: canOpenMedia = Boolean(message.media && (message.media.cachedDataUrl || (message.fromMe && isVisualMedia && mediaSource)));
 
   function handleMediaClick(): void {
@@ -27,7 +28,7 @@
   }
 </script>
 
-<article class:mine={message.fromMe} class="bubble">
+<article class:mine={message.fromMe} class:sticker={isSticker} class="bubble">
   {#if showSenderName && message.senderName}
     <p class="sender-name">{message.senderName}</p>
   {/if}
@@ -145,6 +146,38 @@
     background: var(--message-out);
     -webkit-mask: url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%208%2013%22%3E%3Cpath%20d%3D%22M0%200h6.5c1.3%200%201.9%201.2.9%202.6L0%2011.2V0z%22%2F%3E%3C%2Fsvg%3E') no-repeat;
     mask: url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%208%2013%22%3E%3Cpath%20d%3D%22M0%200h6.5c1.3%200%201.9%201.2.9%202.6L0%2011.2V0z%22%2F%3E%3C%2Fsvg%3E') no-repeat;
+  }
+
+  .bubble.sticker {
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+    margin-left: 8px;
+    margin-right: 0;
+  }
+
+  .bubble.sticker.mine {
+    margin-left: 0;
+    margin-right: 8px;
+  }
+
+  .bubble.sticker::before {
+    display: none;
+  }
+
+  .bubble.sticker .media-card {
+    background: transparent;
+    min-height: auto;
+    width: 160px;
+  }
+
+  .bubble.sticker .media-card.visual-media {
+    min-height: auto;
+  }
+
+  .bubble.sticker .visual-frame {
+    background: transparent;
+    min-height: auto;
   }
 
   p {

@@ -106,7 +106,7 @@
       </div>
     </div>
     <button class="close-btn" on:click={() => dispatch('close')} aria-label="Close">
-      <Icon name="arrow-back" size="28px" />
+      <Icon name="arrow-back" size="24px" />
     </button>
   </header>
 

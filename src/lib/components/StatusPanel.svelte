@@ -215,13 +215,6 @@
 </script>
 
 <section class="status-panel" aria-label="Status updates">
-  <div class="status-header">
-    <h2>Status</h2>
-    <div class="status-actions">
-      <button class="icon-btn"><Icon name="more" /></button>
-    </div>
-  </div>
-
   <div class="status-row">
     <button class="status-item my-status" type="button" on:click={() => myStatuses.length > 0 ? (activeViewerSenderId = 'me') : (isComposing = true)}>
       <div class="avatar-wrapper">
@@ -278,10 +271,10 @@
 
   <div class="fab-container">
     <button class="fab small" on:click={() => { mode = 'text'; isComposing = true; }} aria-label="Text status">
-      <Icon name="edit" />
+      <Icon name="edit" size="24px" />
     </button>
     <button class="fab" on:click={() => { mode = 'image'; isComposing = true; }} aria-label="Media status">
-      <Icon name="camera" />
+      <Icon name="camera" size="24px" />
     </button>
   </div>
 </section>
@@ -290,7 +283,7 @@
   <div class="compose-modal">
     <header class="compose-header">
       <button class="icon-btn" on:click={() => (isComposing = false)}>
-        <Icon name="arrow-back" />
+        <Icon name="arrow-back" size="24px" />
       </button>
       <h2>{mode === 'text' ? 'Type a status' : mode === 'image' || mode === 'video' ? 'Send media' : 'Status Tool'}</h2>
       <div style="width: 40px"></div>
@@ -464,28 +457,6 @@
     position: relative;
   }
 
-  .status-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 8px;
-  }
-
-  .status-header h2 {
-    color: var(--ink, #101f1b);
-    font-size: 1.3rem;
-    font-weight: 700;
-  }
-
-  .icon-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: none;
-    color: var(--muted, #667781);
-    cursor: pointer;
-  }
 
   .status-row {
     display: flex;

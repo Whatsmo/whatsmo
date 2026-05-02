@@ -98,7 +98,7 @@
 
 <section class="chat-window" aria-label="Conversation">
   <header>
-    <button class="back" aria-label="Back to chats" on:click={onBack}><Icon name="arrow-back" /></button>
+    <button class="back" aria-label="Back to chats" on:click={onBack}><Icon name="arrow-back" size="24px" /></button>
     <div class:has-image={Boolean(chat.avatarUrl)} class="avatar" style={`background: ${chat.avatarGradient}`}>
       {#if chat.avatarUrl}
         <img src={chat.avatarUrl} alt="" loading="lazy" referrerpolicy="no-referrer" />
@@ -137,7 +137,7 @@
   {#if infoOpen}
     <aside class="chat-info" aria-label="Chat info">
       <header>
-        <button aria-label="Close chat info" on:click={() => (infoOpen = false)}><Icon name="arrow-back" /></button>
+        <button aria-label="Close chat info" on:click={() => (infoOpen = false)}><Icon name="arrow-back" size="24px" /></button>
         <strong>Chat info</strong>
       </header>
 
@@ -354,7 +354,6 @@
   .back {
     width: 40px;
     height: 40px;
-    font-size: 1.5rem;
     margin-right: -4px;
   }
 
