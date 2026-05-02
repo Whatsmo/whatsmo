@@ -125,7 +125,7 @@ Legend:
 - [x] Video status upload command through `client.upload(..., MediaType::Video)` and `client.status().send_video`
 - [x] Image status thumbnail generation with local JPEG thumbnail creation
 - [x] Video status thumbnail generation with automatic JPEG thumbnail fallback
-- [ ] Status feed/viewer for contacts' statuses
+- [x] Status feed/viewer for contacts' statuses
 - [ ] Status reactions: documented upstream, but `whatsapp-rust 0.5.0` currently does not expose `client.status().send_reaction`
 - [ ] Status message event parsing with server IDs for reactions/viewer actions
 
@@ -158,10 +158,10 @@ Legend:
 - [x] Bottom navigation for Chats and Updates
 - [x] Empty chat state for fresh installs
 - [x] Browser-preview demo data only outside Tauri runtime
-- [ ] Real settings screen
-- [ ] Better onboarding/error states for failed pair-code or QR flows
+- [x] Real settings screen
+- [x] Better onboarding/error states for failed pair-code or QR flows
 - [ ] Accessibility pass: labels, focus order, contrast, larger text support
-- [ ] Loading skeletons and progress indicators for network-heavy operations
+- [x] Loading skeletons and progress indicators for network-heavy operations
 
 ### Security, reliability, and release quality
 
