@@ -65,10 +65,14 @@
         <span class="toggle-label">Show group avatars</span>
         <span class="toggle-desc">Display sender avatars next to messages in group chats</span>
       </div>
-      <label class="toggle-switch">
-        <input type="checkbox" checked={$appState.showGroupAvatars} on:change={() => setShowGroupAvatars(!$appState.showGroupAvatars)} />
-        <span class="toggle-track"></span>
-      </label>
+      <button
+        class="toggle-switch"
+        class:active={$appState.showGroupAvatars}
+        on:click={() => setShowGroupAvatars(!$appState.showGroupAvatars)}
+        aria-label="Toggle group avatars"
+      >
+        <span class="toggle-thumb"></span>
+      </button>
     </div>
   </section>
 
