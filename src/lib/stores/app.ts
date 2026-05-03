@@ -1206,15 +1206,25 @@ function scheduleGroupMetadataSync(groupIds?: string[]): void {
   }, 1000);
 }
 
+const pendingProfileSyncIds = new Set<string>();
+
 function scheduleContactProfileSync(contactIds?: string[]): void {
   if (typeof window === 'undefined') {
     return;
   }
 
+  if (contactIds) {
+    for (const id of contactIds) {
+      if (id) pendingProfileSyncIds.add(id);
+    }
+  }
+
   window.clearTimeout(contactProfileTimer);
   contactProfileTimer = window.setTimeout(() => {
-    void syncKnownContactProfiles(contactIds);
-  }, 1200);
+    const ids = pendingProfileSyncIds.size > 0 ? Array.from(pendingProfileSyncIds) : contactIds;
+    pendingProfileSyncIds.clear();
+    void syncKnownContactProfiles(ids);
+  }, 800);
 }
 
 function isRetryableOutgoingMessage(message: ChatMessage): boolean {
