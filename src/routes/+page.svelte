@@ -8,6 +8,7 @@
   import Icon from '$lib/components/Icon.svelte';
   import StatusPanel from '$lib/components/StatusPanel.svelte';
   import SettingsPanel from '$lib/components/SettingsPanel.svelte';
+  import DevicesPanel from '$lib/components/DevicesPanel.svelte';
   import type { MediaKind } from '$lib/api/types';
   import { connectBridge, connectNotificationActions } from '$lib/api/whatsmo';
   import {
@@ -42,25 +43,17 @@
   let notificationActionCleanup: UnlistenFn | undefined;
   let attachNotice = false;
   let pendingAttachment: { chatId: string; file: File; kind: MediaKind; previewUrl?: string; caption: string; viewOnce: boolean } | null = null;
-  let authModalOpen = false;
-  let activeScreen: 'chats' | 'chat' | 'updates' | 'settings' = 'chats';
+  let activeScreen: 'chats' | 'chat' | 'updates' | 'settings' | 'devices' = 'chats';
   let suppressHistoryPush = false;
 
-  $: linkLabel =
-    $appState.auth.mode === 'connected'
-      ? 'Linked'
-      : $appState.auth.mode === 'connecting'
-        ? 'Pairing'
-        : 'Link';
-  $: linkModalTitle = $appState.auth.mode === 'connected' ? 'Linked account' : 'Link this device';
+
 
   onMount(() => {
-    window.history.replaceState({ screen: activeScreen, authModalOpen }, '');
+    window.history.replaceState({ screen: activeScreen }, '');
 
     const handlePopState = (event: PopStateEvent) => {
-      const state = event.state as { screen?: typeof activeScreen; authModalOpen?: boolean } | null;
+      const state = event.state as { screen?: typeof activeScreen } | null;
       suppressHistoryPush = true;
-      authModalOpen = Boolean(state?.authModalOpen);
       activeScreen = state?.screen ?? 'chats';
       suppressHistoryPush = false;
     };
@@ -91,7 +84,6 @@
     void connectNotificationActions((chatId) => {
       selectChat(chatId);
       activeScreen = 'chat';
-      authModalOpen = false;
       pushNavigationState();
     }).then((cleanup) => {
       notificationActionCleanup = cleanup;
@@ -106,7 +98,7 @@
 
   function pushNavigationState(): void {
     if (suppressHistoryPush) return;
-    window.history.pushState({ screen: activeScreen, authModalOpen }, '');
+    window.history.pushState({ screen: activeScreen }, '');
   }
 
   async function handleAttachment(chatId: string, file: File): Promise<void> {
@@ -166,29 +158,18 @@
   function openChat(chatId: string): void {
     selectChat(chatId);
     activeScreen = 'chat';
-    authModalOpen = false;
     pushNavigationState();
   }
 
-  function closeAuthModal(): void {
-    if (authModalOpen) window.history.back();
-  }
-
-  function openAuthModal(): void {
-    authModalOpen = true;
-    pushNavigationState();
-  }
-
-  function setScreen(screen: 'chats' | 'updates' | 'settings'): void {
+  function setScreen(screen: 'chats' | 'updates' | 'settings' | 'devices'): void {
     activeScreen = screen;
-    authModalOpen = false;
     pushNavigationState();
   }
 </script>
 
 <svelte:window
   on:keydown={(event) => {
-    if (event.key === 'Escape') closeAuthModal();
+    if (event.key === 'Escape' && activeScreen === 'chat') setScreen('chats');
   }}
 />
 
@@ -223,15 +204,6 @@
             <button class="icon-button" aria-label="Camera">
               <Icon name="photo_camera" />
             </button>
-            <button
-              class:connected={$appState.auth.mode === 'connected'}
-              class="link-button"
-              aria-haspopup="dialog"
-              aria-expanded={authModalOpen}
-              on:click={openAuthModal}
-            >
-              {linkLabel}
-            </button>
             <button class="icon-button" aria-label="More options">
               <Icon name="more_vert" />
             </button>
@@ -240,13 +212,6 @@
         {/if}
 
         <div class="screen-content">
-          {#if $appState.historySync && activeScreen !== 'settings'}
-            <section class:active={$appState.historySync.active} class="history-sync-banner" aria-live="polite">
-              <strong>{$appState.historySync.active ? 'Syncing history' : 'History sync'}</strong>
-              <span>{$appState.historySync.message}</span>
-            </section>
-          {/if}
-
           {#if activeScreen === 'chats'}
             <ChatList
               chats={$appState.chats}
@@ -258,10 +223,12 @@
               onTogglePin={toggleChatPinned}
               onToggleRead={toggleChatRead}
             />
+          {:else if activeScreen === 'updates'}
+            <StatusPanel auth={$appState.auth} contacts={$appState.contacts} statuses={$appState.statuses} />
+          {:else if activeScreen === 'devices'}
+            <DevicesPanel auth={$appState.auth} account={$appState.account} historySync={$appState.historySync} />
           {:else if activeScreen === 'settings'}
             <SettingsPanel />
-          {:else}
-            <StatusPanel auth={$appState.auth} contacts={$appState.contacts} statuses={$appState.statuses} />
           {/if}
         </div>
 
@@ -271,6 +238,9 @@
           </button>
           <button class:active={activeScreen === 'updates'} on:click={() => setScreen('updates')}>
             <span><Icon name="updates" /></span> Updates
+          </button>
+          <button class:active={activeScreen === 'devices'} on:click={() => setScreen('devices')}>
+            <span><Icon name="devices" /></span> Devices
           </button>
           <button class:active={activeScreen === 'settings'} on:click={() => setScreen('settings')}>
             <span><Icon name="settings" /></span> Settings
@@ -313,24 +283,7 @@
     </div>
   {/if}
 
-  {#if authModalOpen}
-    <div class="modal-backdrop">
-      <button class="modal-dismiss" aria-label="Close link dialog" on:click={closeAuthModal}></button>
-      <div
-        class="link-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="link-modal-title"
-        tabindex="-1"
-      >
-        <header class="link-modal__header">
-          <h2 id="link-modal-title">{linkModalTitle}</h2>
-          <button aria-label="Close link dialog" on:click={closeAuthModal}>×</button>
-        </header>
-        <AuthPanel auth={$appState.auth} account={$appState.account} />
-      </div>
-    </div>
-  {/if}
+
 </main>
 
 <style>
@@ -522,27 +475,11 @@
     cursor: pointer;
   }
 
-  .link-button {
-    min-height: 36px;
-    border: 0;
-    border-radius: 999px;
-    padding: 0 16px;
-    color: var(--ink);
-    font: inherit;
-    font-size: 0.85rem;
-    font-weight: 500;
-    background: transparent;
-    cursor: pointer;
-  }
 
-  .link-button.connected {
-    color: var(--wa-green-dark);
-    background: var(--nav-active);
-  }
 
   .bottom-nav {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 4px;
     padding: 0 12px max(0px, var(--safe-bottom));
     border-top: 1px solid var(--border-color);
@@ -591,30 +528,7 @@
     background-color: var(--nav-active);
   }
 
-  .history-sync-banner {
-    display: grid;
-    gap: 4px;
-    margin: 0;
-    padding: 12px 16px;
-    color: var(--wa-green-dark);
-    background: var(--nav-active);
-    border-bottom: 1px solid var(--border-color);
-  }
 
-  .history-sync-banner.active {
-    background: var(--wa-mint);
-  }
-
-  .history-sync-banner strong {
-    font-size: 0.9rem;
-    font-weight: 500;
-  }
-
-  .history-sync-banner span {
-    color: var(--muted);
-    font-size: 0.85rem;
-    line-height: 1.4;
-  }
 
   .toast {
     position: fixed;
@@ -712,74 +626,7 @@
     background: var(--wa-green);
   }
 
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 20;
-    display: grid;
-    place-items: end center;
-    padding: max(18px, var(--safe-top)) max(12px, var(--safe-right)) max(18px, var(--safe-bottom)) max(12px, var(--safe-left));
-    background: rgba(0, 0, 0, 0.42);
-    backdrop-filter: blur(8px);
-  }
 
-  .link-modal {
-    position: relative;
-    z-index: 1;
-    display: grid;
-    gap: 14px;
-    width: min(100%, 430px);
-    max-height: min(78vh, 720px);
-    overflow-y: auto;
-    border-radius: 28px 28px 24px 24px;
-    padding: 24px;
-    background: var(--modal-bg, var(--paper));
-    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.38);
-    animation: modal-rise 180ms ease-out both;
-  }
-
-  .modal-dismiss {
-    position: absolute;
-    inset: 0;
-    border: 0;
-    padding: 0;
-    background: transparent;
-  }
-
-  .link-modal__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 14px;
-  }
-
-  .link-modal__header h2 {
-    margin: 0;
-  }
-
-  .link-modal__header h2 {
-    color: var(--ink);
-    font-size: 1.4rem;
-    font-weight: 400;
-  }
-
-  .link-modal__header button {
-    width: 40px;
-    height: 40px;
-    border: 0;
-    border-radius: 999px;
-    color: var(--ink);
-    font: inherit;
-    font-size: 1.5rem;
-    background: transparent;
-  }
-
-  @keyframes modal-rise {
-    from {
-      opacity: 0;
-      transform: translateY(18px) scale(0.98);
-    }
-  }
 
   @media (max-width: 520px) {
     .app-stage {
@@ -796,18 +643,6 @@
 
     .bottom-nav {
       padding-bottom: max(16px, calc(8px + var(--safe-bottom)));
-    }
-
-    .modal-backdrop {
-      place-items: end stretch;
-      padding: 0;
-    }
-
-    .link-modal {
-      width: 100%;
-      max-height: 86vh;
-      border-radius: 28px 28px 0 0;
-      padding-bottom: max(16px, calc(16px + var(--safe-bottom)));
     }
   }
 </style>
