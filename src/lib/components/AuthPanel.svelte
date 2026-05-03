@@ -177,7 +177,10 @@
       </div>
       <p class="qr-hint">Open WhatsApp → <strong>Linked devices</strong> → <strong>Link a device</strong></p>
     {:else if auth.mode === 'pair-code' && auth.pairCode}
-      <div class="pair-code-display">{auth.pairCode}</div>
+      <button class="pair-code-display" on:click={() => { navigator.clipboard.writeText(auth.pairCode ?? ''); }} aria-label="Copy pair code">
+        {auth.pairCode}
+        <span class="copy-hint">Tap to copy</span>
+      </button>
       <p class="qr-hint">Enter this code in WhatsApp → <strong>Linked devices</strong> → <strong>Link with phone number</strong></p>
     {/if}
   </div>
@@ -450,15 +453,34 @@
   }
 
   .pair-code-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
     padding: 18px 32px;
     border-radius: 16px;
     color: var(--wa-green, #008069);
+    font: inherit;
     font-size: 2.2rem;
     font-weight: 800;
     letter-spacing: 0.18em;
     background: var(--paper, white);
     border: 2px dashed color-mix(in srgb, var(--wa-green, #25d366) 30%, transparent);
     margin: 8px 0;
+    cursor: pointer;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  .pair-code-display:active {
+    background: color-mix(in srgb, var(--wa-green) 8%, var(--paper, white));
+  }
+
+  .copy-hint {
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--muted);
   }
 
   .qr-hint {
