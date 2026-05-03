@@ -194,7 +194,7 @@ pub struct DownloadedMediaPayload {
     data: Vec<u8>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum MessageEventKind {
     Message,
@@ -1492,18 +1492,6 @@ async fn start_session(
                                 }
                             }
                         }
-
-                        // Debug: log edit/revoke events so we can trace the pipeline
-                        eprintln!(
-                            "[whatsmo] Event::Message  kind={:?}  edit_attr={:?}  id={}  target_id={:?}  from_me={}  chat={}  text={:?}",
-                            event_kind,
-                            info.edit,
-                            info.id,
-                            target_id,
-                            info.source.is_from_me,
-                            chat_id,
-                            resolved_text.as_deref().map(|s| s.chars().take(60).collect::<String>()),
-                        );
 
                         let payload = IncomingMessagePayload {
                             id: info.id.to_string(),

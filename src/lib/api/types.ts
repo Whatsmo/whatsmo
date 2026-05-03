@@ -80,15 +80,11 @@ export interface ChatMessage {
   deleted?: boolean;
   edited?: boolean;
   media?: MediaAttachment;
-  /** Quote/reply context */
   quotedMessageId?: string;
   quotedSenderName?: string;
   quotedText?: string;
-  /** Reactions on this message */
   reactions?: Array<{ emoji: string; senderId: string }>;
-  /** Power Feature: original content preserved when sender deleted */
   deletedBySender?: boolean;
-  /** Power Feature: history of original texts before edits */
   editHistory?: string[];
 }
 
