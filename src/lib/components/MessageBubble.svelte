@@ -130,12 +130,13 @@
   {/if}
   {#if message.quotedMessageId && (message.quotedText || message.quotedSenderName)}
     <button class="quoted-preview" type="button" on:click|stopPropagation={() => onScrollToMessage(message.quotedMessageId ?? '')}>
-      {#if message.quotedSenderName}
-        <strong>{message.quotedSenderName}</strong>
-      {/if}
-      {#if message.quotedText}
-        <span>{message.quotedText}</span>
-      {/if}
+      <div class="quoted-bar"></div>
+      <div class="quoted-content">
+        {#if message.quotedSenderName}
+          <strong class="quoted-sender">{message.quotedSenderName}</strong>
+        {/if}
+        <p class="quoted-text">{message.quotedText ?? 'Media message'}</p>
+      </div>
     </button>
   {/if}
   {#if message.deleted && !message.deletedBySender}
@@ -449,38 +450,54 @@
   }
 
   .quoted-preview {
-    display: grid;
-    gap: 2px;
+    display: flex;
     width: 100%;
-    margin-bottom: 6px;
-    padding: 6px 10px;
+    margin-bottom: 4px;
+    padding: 0;
     border: 0;
-    border-left: 3px solid var(--wa-green);
-    border-radius: 6px;
+    border-radius: 8px;
     color: inherit;
     font: inherit;
     text-align: left;
-    background: color-mix(in srgb, var(--ink) 6%, transparent);
+    background: color-mix(in srgb, var(--ink) 5%, transparent);
     overflow: hidden;
     cursor: pointer;
   }
 
   .quoted-preview:active {
-    background: color-mix(in srgb, var(--ink) 12%, transparent);
+    background: color-mix(in srgb, var(--ink) 10%, transparent);
   }
 
-  .quoted-preview strong {
+  .quoted-bar {
+    width: 4px;
+    flex-shrink: 0;
+    border-radius: 4px 0 0 4px;
+    background: var(--wa-green);
+  }
+
+  .quoted-content {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 10px;
+    display: grid;
+    gap: 2px;
+  }
+
+  .quoted-sender {
     color: var(--wa-green-dark);
-    font-size: 0.78rem;
+    font-size: 0.8rem;
+    font-weight: 600;
   }
 
-  .quoted-preview span {
+  .quoted-text {
+    margin: 0;
     color: var(--muted);
-    font-size: 0.82rem;
+    font-size: 0.84rem;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 220px;
   }
 
   .retry-button {
