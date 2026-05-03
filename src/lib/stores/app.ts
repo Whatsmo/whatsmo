@@ -691,6 +691,7 @@ function cacheDownloadedMedia(chatId: string, messageId: string, downloaded: Dow
 }
 
 export function ingestIncomingMessage(payload: IncomingMessagePayload): void {
+  console.log('[whatsmo] ingest:', payload.eventKind, 'id:', payload.id, 'target:', payload.targetMessageId, 'text:', payload.text?.slice(0, 60));
   if (payload.eventKind === 'edit') {
     applyMessageEdit(payload);
     return;

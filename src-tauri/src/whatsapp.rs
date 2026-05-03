@@ -194,7 +194,7 @@ pub struct DownloadedMediaPayload {
     data: Vec<u8>,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum MessageEventKind {
     Message,
@@ -1328,6 +1328,56 @@ async fn start_session(
                     }
                     Event::Message(message, info) => {
                         let chat_id = info.source.chat.to_string();
+                        let event_kind = message_event_kind(&info.edit);
+
+                        // wacore may not populate meta_info.target_id for edit/revoke events.
+                        // Fall back to the ProtocolMessage.key.id which carries the original
+                        // message ID for both edits (MessageEdit) and revokes (Revoke).
+                        let mut target_id = info
+                            .meta_info
+                            .target_id
+                            .as_ref()
+                            .map(ToString::to_string);
+
+                        // For edits, the new text is inside ProtocolMessage.edited_message.
+                        // text_content() won't find it because it only looks at the top-level
+                        // message fields, not inside protocol_message.
+                        let mut resolved_text = message.text_content().map(ToString::to_string);
+
+                        if let Some(ref proto) = message.protocol_message {
+                            // Extract target message ID from ProtocolMessage.key
+                            if target_id.is_none() {
+                                if let Some(ref key) = proto.key {
+                                    if let Some(ref id) = key.id {
+                                        if !id.is_empty() {
+                                            target_id = Some(id.clone());
+                                        }
+                                    }
+                                }
+                            }
+
+                            // For edits: extract the new text from the edited_message field
+                            if resolved_text.is_none() {
+                                if let Some(ref edited_msg) = proto.edited_message {
+                                    resolved_text = edited_msg
+                                        .text_content()
+                                        .map(ToString::to_string);
+                                }
+                            }
+                        }
+
+                        // Debug: log edit/revoke events so we can trace the pipeline
+                        eprintln!(
+                            "[whatsmo] Event::Message  kind={:?}  edit_attr={:?}  id={}  target_id={:?}  from_me={}  chat={}  text={:?}",
+                            event_kind,
+                            info.edit,
+                            info.id,
+                            target_id,
+                            info.source.is_from_me,
+                            chat_id,
+                            resolved_text.as_deref().map(|s| s.chars().take(60).collect::<String>()),
+                        );
+
                         let payload = IncomingMessagePayload {
                             id: info.id.to_string(),
                             chat_id: chat_id.clone(),
@@ -1337,16 +1387,12 @@ async fn start_session(
                             )
                             .to_string(),
                             sender_name: non_empty_string(&info.push_name),
-                            text: message.text_content().map(ToString::to_string),
+                            text: resolved_text,
                             timestamp_ms: info.timestamp.timestamp_millis(),
                             is_group: info.source.is_group,
                             from_me: info.source.is_from_me,
-                            event_kind: message_event_kind(&info.edit),
-                            target_message_id: info
-                                .meta_info
-                                .target_id
-                                .as_ref()
-                                .map(ToString::to_string),
+                            event_kind,
+                            target_message_id: target_id,
                             media: media_attachment_payload(&info.id.to_string(), &message),
                         };
                         emit_event(&app, "whatsmo://message", payload);
