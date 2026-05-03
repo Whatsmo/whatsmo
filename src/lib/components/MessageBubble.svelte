@@ -12,14 +12,17 @@
   export let onOpenMedia: (message: ChatMessage) => void = () => undefined;
   export let onLongPress: (message: ChatMessage) => void = () => undefined;
   export let onSwipeReply: (message: ChatMessage) => void = () => undefined;
+  export let onScrollToMessage: (messageId: string) => void = () => undefined;
 
   const LONG_PRESS_MS = 420;
-  const SWIPE_THRESHOLD = 64;
+  const SWIPE_THRESHOLD = 90;
   let longPressTimer: number | undefined;
   let suppressClick = false;
   let swipeStartX = 0;
+  let swipeStartY = 0;
   let swipeOffsetX = 0;
   let isSwiping = false;
+  let swipeLocked = false;
   let bubbleEl: HTMLElement;
 
   function startLongPress(): void {
@@ -36,16 +39,26 @@
 
   function handleTouchStart(event: TouchEvent): void {
     swipeStartX = event.touches[0].clientX;
+    swipeStartY = event.touches[0].clientY;
     swipeOffsetX = 0;
     isSwiping = false;
+    swipeLocked = false;
   }
 
   function handleTouchMove(event: TouchEvent): void {
+    if (swipeLocked) return;
     const dx = event.touches[0].clientX - swipeStartX;
-    if (dx > 12) {
+    const dy = Math.abs(event.touches[0].clientY - swipeStartY);
+
+    if (!isSwiping && dy > 20) {
+      swipeLocked = true;
+      return;
+    }
+
+    if (dx > 20) {
       isSwiping = true;
       cancelLongPress();
-      swipeOffsetX = Math.min(dx, 100);
+      swipeOffsetX = Math.min(dx, 110);
       if (bubbleEl) bubbleEl.style.transform = `translateX(${swipeOffsetX}px)`;
     }
   }
@@ -55,6 +68,7 @@
       onSwipeReply(message);
     }
     isSwiping = false;
+    swipeLocked = false;
     swipeOffsetX = 0;
     if (bubbleEl) bubbleEl.style.transform = '';
   }
@@ -114,15 +128,15 @@
   {#if showSenderName && message.senderName}
     <p class="sender-name">{message.senderName}</p>
   {/if}
-  {#if message.quotedText || message.quotedSenderName}
-    <div class="quoted-preview">
+  {#if message.quotedMessageId && (message.quotedText || message.quotedSenderName)}
+    <button class="quoted-preview" type="button" on:click|stopPropagation={() => onScrollToMessage(message.quotedMessageId ?? '')}>
       {#if message.quotedSenderName}
         <strong>{message.quotedSenderName}</strong>
       {/if}
       {#if message.quotedText}
         <span>{message.quotedText}</span>
       {/if}
-    </div>
+    </button>
   {/if}
   {#if message.deleted && !message.deletedBySender}
     <p class="deleted">{message.text ?? 'This message was deleted.'}</p>
@@ -437,12 +451,22 @@
   .quoted-preview {
     display: grid;
     gap: 2px;
+    width: 100%;
     margin-bottom: 6px;
     padding: 6px 10px;
+    border: 0;
     border-left: 3px solid var(--wa-green);
     border-radius: 6px;
+    color: inherit;
+    font: inherit;
+    text-align: left;
     background: color-mix(in srgb, var(--ink) 6%, transparent);
     overflow: hidden;
+    cursor: pointer;
+  }
+
+  .quoted-preview:active {
+    background: color-mix(in srgb, var(--ink) 12%, transparent);
   }
 
   .quoted-preview strong {

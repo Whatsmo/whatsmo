@@ -91,6 +91,16 @@
     messageFieldEl?.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  function scrollToMessage(messageId: string): void {
+    if (!messageFieldEl || !messageId) return;
+    const el = messageFieldEl.querySelector(`[data-message-id="${messageId}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('highlight-flash');
+      setTimeout(() => el.classList.remove('highlight-flash'), 1500);
+    }
+  }
+
   function handleScroll(): void {
     if (!messageFieldEl) return;
     const { scrollTop, scrollHeight, clientHeight } = messageFieldEl;
@@ -276,7 +286,7 @@
       {@const isNewSender = !prevMessage || prevMessage.senderId !== message.senderId || prevMessage.fromMe !== message.fromMe}
       {@const isGroupOther = chat.kind === 'group' && !message.fromMe}
       {@const senderContact = isGroupOther ? contacts.find((c) => c.id === message.senderId || c.lid === message.senderId) : null}
-      <div class:sender-gap={isNewSender && i > 0} class="msg-wrap">
+      <div class:sender-gap={isNewSender && i > 0} class="msg-wrap" data-message-id={message.id}>
         <MessageBubble
           {message}
           showSenderName={isGroupOther && isNewSender}
@@ -288,6 +298,7 @@
           onOpenMedia={openMedia}
           onLongPress={openContextMenu}
           onSwipeReply={(msg: ChatMessage) => { replyingTo = msg; }}
+          onScrollToMessage={scrollToMessage}
         />
       </div>
     {/each}
@@ -642,6 +653,15 @@
 
   .msg-wrap.sender-gap {
     padding-top: 10px;
+  }
+
+  :global(.msg-wrap.highlight-flash) {
+    animation: flash-highlight 1.5s ease;
+  }
+
+  @keyframes flash-highlight {
+    0%, 100% { background: transparent; }
+    20% { background: color-mix(in srgb, var(--wa-green) 18%, transparent); }
   }
 
   .scroll-buttons {

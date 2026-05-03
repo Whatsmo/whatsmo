@@ -736,7 +736,7 @@ export function ingestIncomingMessage(payload: IncomingMessagePayload): void {
     status: payload.fromMe ? 'sent' : 'delivered',
     media: normalizeMediaAttachment(payload.media),
     quotedMessageId: payload.quotedMessageId,
-    quotedSenderName: payload.quotedSenderName,
+    quotedSenderName: payload.quotedSenderName ? resolveMessageSenderName(currentState, payload.quotedSenderName, undefined) : undefined,
     quotedText: payload.quotedText
   };
 
@@ -1126,7 +1126,7 @@ function messageFromIncomingPayload(payload: IncomingMessagePayload): ChatMessag
     status: payload.fromMe ? 'sent' : 'delivered',
     media: normalizeMediaAttachment(payload.media),
     quotedMessageId: payload.quotedMessageId,
-    quotedSenderName: payload.quotedSenderName,
+    quotedSenderName: payload.quotedSenderName ? resolveMessageSenderName(state, payload.quotedSenderName, undefined) : undefined,
     quotedText: payload.quotedText
   };
 }
@@ -1479,13 +1479,17 @@ function profileFromLookup(contact: ContactLookupPayload): ContactProfile {
 }
 
 function profileFromPayload(contact: ContactProfilePayload): ContactProfile {
+  const state = get(appState);
+  const existing = state.contacts.find((c) => c.id === contact.id || c.lid === contact.id);
+  const existingHasGoodName = existing?.name && !isRawIdentifierName(existing.name) && !existing.name.startsWith('+');
+
   return {
     id: contact.id,
-    name: contact.phone ? `+${contact.phone}` : displayNameFromJid(contact.id),
+    name: existingHasGoodName ? existing.name : (contact.phone ? `+${contact.phone}` : displayNameFromJid(contact.id)),
     phone: `+${contact.phone}`,
     about: contact.about ?? (contact.isBusiness ? 'Business account' : 'WhatsApp contact'),
-    avatarGradient: gradientFromId(contact.id),
-    avatarUrl: contact.avatarUrl,
+    avatarGradient: existing?.avatarGradient ?? gradientFromId(contact.id),
+    avatarUrl: contact.avatarUrl ?? existing?.avatarUrl,
     lid: contact.lid,
     pictureId: contact.pictureId,
     profileUpdatedAt: contact.updatedAtMs,
