@@ -65,6 +65,17 @@
   let errorMessage = '';
   let isComposing = false;
   let activeViewerSenderId: string | null = null;
+  let showAdvanced = false;
+
+  function cycleColor(): void {
+    const currentIndex = colors.findIndex((c) => c.value === selectedColor.value);
+    selectedColor = colors[(currentIndex + 1) % colors.length];
+  }
+
+  function cycleFont(): void {
+    const currentIndex = fonts.findIndex((f) => f.value === selectedFont.value);
+    selectedFont = fonts[(currentIndex + 1) % fonts.length];
+  }
 
   $: userContacts = contacts.filter((contact) => contact.id.includes('@s.whatsapp.net'));
   $: canUseStatusRecipients = mode !== 'react';
@@ -280,161 +291,199 @@
 </section>
 
 {#if isComposing}
-  <div class="compose-modal">
-    <header class="compose-header">
-      <button class="icon-btn" on:click={() => (isComposing = false)}>
-        <Icon name="arrow-back" size="24px" />
-      </button>
-      <h2>{mode === 'text' ? 'Type a status' : mode === 'image' || mode === 'video' ? 'Send media' : 'Status Tool'}</h2>
-      <div style="width: 40px"></div>
-    </header>
-
-    <div class="compose-body">
-      <div class="mode-tabs" aria-label="Status mode">
-    {#each modes as item}
-      <button class:active={mode === item.value} on:click={() => (mode = item.value)}>{item.label}</button>
-    {/each}
-  </div>
-
-  {#if canUseStatusRecipients}
-    <div class="recipient-card">
-      <label class="field compact">
-        <span>Sync recipients</span>
-        <input bind:value={contactInput} inputmode="tel" placeholder="62812..., 62857..." />
-      </label>
-      <button class="secondary" disabled={busy || auth.mode !== 'connected'} on:click={addContacts}>Sync</button>
-
-      <div class="contacts" aria-label="Synced contacts">
-        {#if userContacts.length === 0}
-          <small>No synced user contacts yet. Add phone numbers above.</small>
-        {/if}
-        {#each userContacts as contact (contact.id)}
-          <button class:active={selectedRecipients.includes(contact.id)} on:click={() => toggleRecipient(contact.id)}>
-            <strong>{contact.name}</strong>
-            <span>{contact.phone}</span>
-          </button>
-        {/each}
-      </div>
-    </div>
-  {/if}
-
-  {#if mode === 'text'}
-    <div class="preview" style={`background: ${selectedColor.css}`}>
-      <p class={`font-${selectedFont.value}`}>{text || 'Type a status...'}</p>
-    </div>
-
-    <label class="field">
-      <span>Status text</span>
-      <textarea bind:value={text} maxlength="700" placeholder="What do you want to share?"></textarea>
-    </label>
-
-    <div class="swatches" aria-label="Background colors">
-      {#each colors as color}
-        <button
-          class:active={selectedColor.value === color.value}
-          style={`background: ${color.css}`}
-          aria-label={color.name}
-          on:click={() => (selectedColor = color)}
-        ></button>
-      {/each}
-    </div>
-
-    <div class="font-row" aria-label="Font style">
-      {#each fonts as font}
-        <button class:active={selectedFont.value === font.value} on:click={() => (selectedFont = font)}>
-          {font.label}
+  <div class="compose-modal" class:text-mode={mode === 'text'} style={mode === 'text' ? `background: ${selectedColor.css}` : ''}>
+    {#if mode === 'text'}
+      <header class="compose-header transparent">
+        <button class="icon-btn" on:click={() => (isComposing = false)}>
+          <Icon name="close" size="24px" />
         </button>
-      {/each}
-    </div>
-  {:else if mode === 'image'}
-    <label class="field">
-      <span>Image</span>
-      <input accept="image/*" type="file" on:change={handleImageChange} />
-      <small>{imageFile?.name ?? 'Choose an image to upload as status.'}</small>
-    </label>
-    <label class="field">
-      <span>Caption</span>
-      <input bind:value={caption} placeholder="Optional caption" />
-    </label>
-  {:else if mode === 'video'}
-    <label class="field">
-      <span>Video</span>
-      <input accept="video/*" type="file" on:change={handleVideoChange} />
-      <small>{videoFile?.name ?? 'Choose a video file.'}</small>
-    </label>
-    <label class="field">
-      <span>JPEG thumbnail</span>
-      <input accept="image/jpeg,image/jpg" type="file" on:change={handleThumbnailChange} />
-      <small>{thumbnailFile?.name ?? 'Generated automatically if you do not choose one.'}</small>
-    </label>
-    <label class="field">
-      <span>Duration seconds</span>
-      <input bind:value={durationSeconds} min="1" type="number" />
-    </label>
-    <label class="field">
-      <span>Caption</span>
-      <input bind:value={caption} placeholder="Optional caption" />
-    </label>
-  {:else if mode === 'raw'}
-    <label class="field">
-      <span>Raw text payload</span>
-      <textarea bind:value={rawText} placeholder="Builds a raw wa::Message extendedTextMessage"></textarea>
-    </label>
-  {:else if mode === 'revoke'}
-    <label class="field">
-      <span>Status message ID</span>
-      <input bind:value={revokeMessageId} placeholder="Message ID returned when posting" />
-    </label>
-  {:else}
-    <p class="unsupported">
-      Status reactions are in the upstream docs, but the installed whatsapp-rust 0.5.0 crate does not expose
-      `client.status().send_reaction` yet. This tab is kept here so we can enable it as soon as the crate catches up.
-    </p>
-    <label class="field">
-      <span>Status owner</span>
-      <input bind:value={reactionOwner} inputmode="tel" placeholder="62812..." />
-    </label>
-    <label class="field">
-      <span>Server ID</span>
-      <input bind:value={reactionServerId} inputmode="numeric" placeholder="Numeric server id" />
-    </label>
-    <label class="field">
-      <span>Reaction</span>
-      <input bind:value={reaction} placeholder="💚 or blank to remove" />
-    </label>
-  {/if}
+        <div class="header-actions">
+          <button class="icon-btn" on:click={cycleFont}>
+            <Icon name="text_fields" size="24px" />
+          </button>
+          <button class="icon-btn" on:click={cycleColor}>
+            <Icon name="palette" size="24px" />
+          </button>
+        </div>
+      </header>
 
-  {#if canUseStatusRecipients}
-    <label class="field compact">
-      <span>Privacy mode</span>
-      <select bind:value={privacy}>
-        <option value="contacts">Contacts</option>
-        <option value="allowlist">Allow list</option>
-        <option value="denylist">Deny list</option>
-      </select>
-    </label>
-  {/if}
+      <div class="compose-body text-center">
+        <textarea
+          bind:value={text}
+          class={`status-textarea font-${selectedFont.value}`}
+          placeholder="Type a status"
+          maxlength="700"
+        ></textarea>
+      </div>
 
-  <button class="post-button" disabled={!canSubmit} on:click={submit}>
-    {busy
-      ? 'Working...'
-      : auth.mode !== 'connected'
-        ? 'Connect WhatsApp first'
-        : mode === 'react'
-          ? 'Reaction unavailable'
-          : `${modes.find((item) => item.value === mode)?.label} status`}
-  </button>
+      <div class="compose-footer">
+        <button type="button" class="privacy-indicator" on:click={() => (showAdvanced = !showAdvanced)}>
+          <Icon name="group" size="16px" />
+          <span>{selectedRecipients.length} recipients</span>
+        </button>
+        <button class="send-fab" disabled={!canSubmit} on:click={submit}>
+          {#if busy}
+            <span class="spinner-white"></span>
+          {:else}
+            <Icon name="send" size="24px" />
+          {/if}
+        </button>
+      </div>
+    {:else if mode === 'image' || mode === 'video'}
+      <header class="compose-header transparent dark-overlay">
+        <button class="icon-btn" on:click={() => (isComposing = false)}>
+          <Icon name="close" size="24px" />
+        </button>
+        <h2>{mode === 'image' ? 'Image status' : 'Video status'}</h2>
+        <div style="width: 40px"></div>
+      </header>
 
-  {#if lastPost}
-    <p class="success">Done. ID: {lastPost.id}</p>
-  {/if}
+      <div class="compose-body media-mode">
+        {#if (mode === 'image' && imageFile) || (mode === 'video' && videoFile)}
+          <div class="media-preview">
+            {#if mode === 'image' && imageFile}
+              <img src={URL.createObjectURL(imageFile)} alt="Status preview" />
+            {:else if mode === 'video' && videoFile}
+              <video src={URL.createObjectURL(videoFile)} controls muted><track kind="captions" /></video>
+            {/if}
+          </div>
+        {:else}
+          <div class="media-picker">
+            <Icon name={mode === 'image' ? 'image' : 'videocam'} size="64px" />
+            <p>Select {mode === 'image' ? 'an image' : 'a video'}</p>
+            <input 
+              accept={mode === 'image' ? 'image/*' : 'video/*'} 
+              type="file" 
+              on:change={mode === 'image' ? handleImageChange : handleVideoChange} 
+            />
+          </div>
+        {/if}
+      </div>
+
+      <div class="compose-footer sticky-footer">
+        <div class="caption-wrapper">
+          <input bind:value={caption} placeholder="Add a caption..." />
+        </div>
+        <div class="footer-bottom">
+          <button type="button" class="privacy-indicator" on:click={() => (showAdvanced = !showAdvanced)}>
+            <Icon name="group" size="16px" />
+            <span>{selectedRecipients.length} recipients</span>
+          </button>
+          <button class="send-fab" disabled={!canSubmit} on:click={submit}>
+            {#if busy}
+              <span class="spinner-white"></span>
+            {:else}
+              <Icon name="send" size="24px" />
+            {/if}
+          </button>
+        </div>
+      </div>
+    {:else}
+      <!-- Advanced/Legacy mode UI -->
+      <header class="compose-header">
+        <button class="icon-btn" on:click={() => (isComposing = false)}>
+          <Icon name="arrow_back" size="24px" />
+        </button>
+        <h2>Status Tools</h2>
+        <div style="width: 40px"></div>
+      </header>
+      <div class="compose-body">
+         <div class="mode-tabs">
+            {#each modes as item}
+              <button class:active={mode === item.value} on:click={() => (mode = item.value)}>{item.label}</button>
+            {/each}
+          </div>
+          <div class="advanced-form">
+            {#if mode === 'raw'}
+              <label class="field">
+                <span>Raw text payload</span>
+                <textarea bind:value={rawText} placeholder="Builds a raw wa::Message extendedTextMessage"></textarea>
+              </label>
+            {:else if mode === 'revoke'}
+              <label class="field">
+                <span>Status message ID</span>
+                <input bind:value={revokeMessageId} placeholder="Message ID returned when posting" />
+              </label>
+            {:else if mode === 'react'}
+              <p class="unsupported">Status reactions pending crate update.</p>
+              <label class="field">
+                <span>Status owner</span>
+                <input bind:value={reactionOwner} inputmode="tel" placeholder="62812..." />
+              </label>
+              <label class="field">
+                <span>Server ID</span>
+                <input bind:value={reactionServerId} inputmode="numeric" placeholder="Numeric server id" />
+              </label>
+              <label class="field">
+                <span>Reaction</span>
+                <input bind:value={reaction} placeholder="💚 or blank to remove" />
+              </label>
+            {/if}
+            <button class="btn btn-primary" disabled={!canSubmit} on:click={submit}>
+              {busy ? 'Processing...' : 'Run Tool'}
+            </button>
+          </div>
+      </div>
+    {/if}
+
+    {#if showAdvanced}
+      <div 
+        class="advanced-overlay" 
+        on:click={() => (showAdvanced = false)} 
+        on:keydown={(e) => e.key === 'Escape' && (showAdvanced = false)}
+        role="button"
+        tabindex="-1"
+      >
+        <div class="advanced-panel" on:click|stopPropagation role="dialog" aria-modal="true">
+          <header class="panel-header">
+            <h3>Status privacy</h3>
+            <button class="icon-btn" on:click={() => (showAdvanced = false)}>
+              <Icon name="close" size="20px" />
+            </button>
+          </header>
+          
+          <div class="panel-body">
+            <div class="recipient-card">
+              <label class="field compact">
+                <span>Sync recipients</span>
+                <div class="sync-input">
+                  <input bind:value={contactInput} inputmode="tel" placeholder="62812..." />
+                  <button class="secondary" disabled={busy} on:click={addContacts}>Sync</button>
+                </div>
+              </label>
+
+              <div class="contacts-grid">
+                {#each userContacts as contact (contact.id)}
+                  <button class="contact-pill" class:active={selectedRecipients.includes(contact.id)} on:click={() => toggleRecipient(contact.id)}>
+                    {contact.name}
+                  </button>
+                {/each}
+              </div>
+            </div>
+
+            <label class="field compact">
+              <span>Privacy mode</span>
+              <select bind:value={privacy}>
+                <option value="contacts">Contacts</option>
+                <option value="allowlist">Allow list</option>
+                <option value="denylist">Deny list</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </div>
+    {/if}
 
     {#if errorMessage}
-      <p class="error">{errorMessage}</p>
+      <div class="error-toast">{errorMessage}</div>
     {/if}
-    </div>
+    
+    {#if lastPost}
+      <div class="success-toast">Status posted!</div>
+    {/if}
   </div>
 {/if}
+
 
 {#if activeViewerSenderId}
   <StatusViewer 
@@ -446,6 +495,16 @@
 {/if}
 
 <style>
+  :global(.spinner-white) {
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    display: block;
+    animation: spin 1s linear infinite;
+  }
+
   .status-panel {
     display: flex;
     flex-direction: column;
@@ -456,6 +515,7 @@
     background: var(--paper, #fbfbf6);
     position: relative;
   }
+
 
 
   .status-row {
@@ -651,7 +711,7 @@
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
   }
 
-  /* Modal overlay styles */
+  /* Immersive Compose Modal */
   .compose-modal {
     position: absolute;
     inset: 0;
@@ -659,144 +719,328 @@
     background: var(--paper, #fbfbf6);
     display: flex;
     flex-direction: column;
-    animation: slideInRight 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    animation: slideInUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
-  @keyframes slideInRight {
-    from { transform: translateX(100%); }
-    to { transform: translateX(0); }
+  .compose-modal.text-mode {
+    transition: background-color 0.4s ease;
+  }
+
+  @keyframes slideInUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
   }
 
   .compose-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: calc(14px + var(--safe-top, 0px)) 14px 14px;
-    background: var(--wa-green, #008069);
+    padding: calc(12px + var(--safe-top, 0px)) 16px 12px;
+    z-index: 10;
+  }
+
+  .compose-header.transparent {
+    background: transparent;
+  }
+
+  .compose-header.dark-overlay {
+    background: linear-gradient(to bottom, rgba(0,0,0,0.4), transparent);
     color: white;
   }
 
   .compose-header h2 {
-    color: white;
-    font-size: 1.15rem;
-    font-weight: 700;
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
   }
 
-  .compose-header .icon-btn {
-    color: white;
-    padding: 8px;
+  .header-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .icon-btn {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border: none;
+    background: transparent;
     border-radius: 50%;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .compose-header.transparent .icon-btn {
+    color: white;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
   }
 
   .compose-body {
     flex: 1;
+    display: flex;
+    flex-direction: column;
     overflow-y: auto;
-    padding: 16px;
+    position: relative;
+  }
+
+  .compose-body.text-center {
+    justify-content: center;
+    align-items: center;
+    padding: 40px 24px;
+  }
+
+  .status-textarea {
+    width: 100%;
+    max-width: 400px;
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 2.2rem;
+    font-weight: 700;
+    text-align: center;
+    resize: none;
+    outline: none;
+    line-height: 1.2;
+  }
+
+  .status-textarea::placeholder {
+    color: rgba(255,255,255,0.6);
+  }
+
+  .compose-footer {
+    padding: 16px 20px max(20px, calc(16px + var(--safe-bottom)));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 10;
+  }
+
+  .compose-footer.sticky-footer {
+    flex-direction: column;
+    gap: 16px;
+    background: linear-gradient(to top, rgba(0,0,0,0.6), transparent);
+  }
+
+  .caption-wrapper {
+    width: 100%;
+    background: rgba(255,255,255,0.15);
+    backdrop-filter: blur(10px);
+    border-radius: 24px;
+    padding: 4px 16px;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+
+  .caption-wrapper input {
+    width: 100%;
+    height: 44px;
+    background: transparent;
+    border: none;
+    color: white;
+    font: inherit;
+    outline: none;
+  }
+
+  .footer-bottom {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .privacy-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: rgba(0,0,0,0.25);
+    color: white;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+  }
+
+  .send-fab {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--wa-green, #25d366);
+    color: white;
+    border: none;
+    display: grid;
+    place-items: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    cursor: pointer;
+  }
+
+  .send-fab:disabled {
+    opacity: 0.5;
+    background: #8696a0;
+  }
+
+  /* Media Preview */
+  .media-mode {
+    background: #000;
+  }
+
+  .media-preview {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .media-preview img, 
+  .media-preview video {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  .media-picker {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    color: white;
+  }
+
+  .media-picker input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  /* Advanced / Legacy Form */
+  .advanced-form {
+    padding: 20px;
     display: flex;
     flex-direction: column;
     gap: 16px;
-    background: var(--paper, #fbfbf6);
   }
 
-  .recipient-card {
-    display: grid;
-    gap: 8px;
-  }
-
-  h2,
-  p {
-    margin: 0;
-  }
-
-  h2 {
-    color: var(--ink, #101f1b);
-    font-size: 1.22rem;
-  }
-
-  small,
-  .success,
-  .unsupported,
-  .error {
-    color: var(--muted, #667781);
-    font-size: 0.82rem;
-    line-height: 1.42;
-  }
-
-  .mode-tabs,
-  .swatches,
-  .font-row,
-  .contacts {
+  .mode-tabs {
     display: flex;
     gap: 8px;
+    padding: 12px 16px;
     overflow-x: auto;
+    border-bottom: 1px solid var(--border-color);
   }
 
-  .mode-tabs button,
-  .font-row button,
-  .contacts button,
-  .secondary {
-    flex: 0 0 auto;
-    border: 1px solid var(--border-color, #e2e7e3);
-    border-radius: 20px;
-    padding: 8px 16px;
-    color: var(--ink, #54645f);
-    font: inherit;
-    font-size: 0.9rem;
-    font-weight: 600;
-    background: transparent;
-    cursor: pointer;
-    transition: background 0.2s ease, border-color 0.2s ease;
-  }
-
-  .mode-tabs button.active,
-  .font-row button.active,
-  .contacts button.active {
-    color: white;
-    background: var(--wa-green-dark, #075e54);
-    border-color: var(--wa-green-dark, #075e54);
-  }
-
-  .recipient-card {
-    padding: 16px;
+  .mode-tabs button {
+    padding: 6px 14px;
     border-radius: 16px;
-    border: 1px solid var(--border-color, #edf0eb);
-    background: transparent;
-    margin-bottom: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--nav-active);
+    white-space: nowrap;
+    font-weight: 600;
   }
 
-  .contacts button {
-    display: grid;
-    gap: 2px;
-    text-align: left;
-  }
-
-  .contacts span {
-    color: #667781;
-    font-size: 0.72rem;
-  }
-
-  .preview {
-    display: grid;
-    place-items: center;
-    min-height: 210px;
-    border-radius: 24px;
-    padding: 22px;
+  .mode-tabs button.active {
+    background: var(--wa-green);
     color: white;
-    text-align: center;
-    box-shadow: 0 16px 36px rgba(16, 31, 27, 0.16);
+    border-color: var(--wa-green);
   }
 
-  .preview p {
-    overflow-wrap: anywhere;
-    font-size: 1.65rem;
-    font-weight: 850;
-    line-height: 1.18;
+  /* Advanced Overlay */
+  .advanced-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: flex-end;
   }
 
+  .advanced-panel {
+    width: 100%;
+    background: var(--paper);
+    border-radius: 24px 24px 0 0;
+    padding: 20px 20px max(24px, calc(16px + var(--safe-bottom)));
+    animation: slideInUp 0.3s ease-out;
+  }
+
+  .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .panel-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .contacts-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .contact-pill {
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    font-size: 0.85rem;
+  }
+
+  .contact-pill.active {
+    background: var(--wa-green-light);
+    color: var(--wa-green-dark);
+    border-color: var(--wa-green);
+  }
+
+  .sync-input {
+    display: flex;
+    gap: 8px;
+  }
+
+  .sync-input input {
+    flex: 1;
+    height: 38px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+  }
+
+  /* Toasts */
+  .error-toast, .success-toast {
+    position: fixed;
+    top: calc(16px + var(--safe-top));
+    left: 16px;
+    right: 16px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    color: white;
+    z-index: 300;
+    animation: fadeDown 0.3s ease;
+  }
+
+  .error-toast { background: #dc3545; }
+  .success-toast { background: var(--wa-green-dark); }
+
+  @keyframes fadeDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Typography */
+  .font-0 { font-family: inherit; }
   .font-1 { font-family: Georgia, serif; }
-  .font-2 { font-family: ui-monospace, 'Cascadia Mono', monospace; font-size: 1.35rem !important; }
-  .font-3 { font-style: italic; }
-  .font-4 { letter-spacing: -0.07em; text-transform: uppercase; }
+  .font-2 { font-family: 'Cascadia Mono', monospace; }
+  .font-3 { font-family: 'Brush Script MT', cursive; font-size: 2.8rem !important; }
+  .font-4 { font-weight: 900; text-transform: uppercase; letter-spacing: -0.05em; }
+
 
   .field {
     display: grid;
@@ -839,45 +1083,11 @@
     min-height: 46px;
   }
 
-  .swatches button {
-    width: 40px;
-    height: 40px;
-    border: 2px solid transparent;
-    border-radius: 50%;
-    flex: 0 0 auto;
-    cursor: pointer;
-    transition: transform 0.1s ease;
-  }
 
-  .swatches button:hover {
-    transform: scale(1.05);
-  }
 
-  .swatches button.active {
-    border-color: var(--wa-green, #008069);
-    box-shadow: 0 0 0 3px var(--paper, white) inset;
-  }
 
-  .post-button {
-    min-height: 52px;
-    border: 0;
-    border-radius: 26px;
-    color: white;
-    font: inherit;
-    font-size: 1.05rem;
-    font-weight: 600;
-    background: var(--wa-green, #008069);
-    cursor: pointer;
-    transition: background 0.2s ease, opacity 0.2s ease;
-    margin-top: 16px;
-  }
 
-  .post-button:hover:not(:disabled) {
-    opacity: 0.9;
-  }
-
-  button:disabled,
-  .post-button:disabled {
+  button:disabled {
     color: var(--muted, #667781);
     background: var(--border-color, #e7ece8);
     cursor: not-allowed;
