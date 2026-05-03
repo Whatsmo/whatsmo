@@ -7,6 +7,23 @@
   export let onRetry: (message: ChatMessage) => void = () => undefined;
   export let onDownloadMedia: (message: ChatMessage) => void = () => undefined;
   export let onOpenMedia: (message: ChatMessage) => void = () => undefined;
+  export let onLongPress: (message: ChatMessage) => void = () => undefined;
+
+  const LONG_PRESS_MS = 420;
+  let longPressTimer: number | undefined;
+  let suppressClick = false;
+
+  function startLongPress(): void {
+    window.clearTimeout(longPressTimer);
+    longPressTimer = window.setTimeout(() => {
+      suppressClick = true;
+      onLongPress(message);
+    }, LONG_PRESS_MS);
+  }
+
+  function cancelLongPress(): void {
+    window.clearTimeout(longPressTimer);
+  }
 
   const formatter = new Intl.DateTimeFormat('en', { hour: '2-digit', minute: '2-digit' });
 
@@ -28,7 +45,16 @@
   }
 </script>
 
-<article class:mine={message.fromMe} class:sticker={isSticker} class="bubble">
+<article
+  class:mine={message.fromMe}
+  class:sticker={isSticker}
+  class="bubble"
+  on:pointerdown={startLongPress}
+  on:pointerup={cancelLongPress}
+  on:pointerleave={cancelLongPress}
+  on:pointercancel={cancelLongPress}
+  on:contextmenu|preventDefault={() => onLongPress(message)}
+>
   {#if showSenderName && message.senderName}
     <p class="sender-name">{message.senderName}</p>
   {/if}

@@ -5,6 +5,7 @@
   const dispatch = createEventDispatcher<{
     send: string;
     attach: File;
+    typing: void;
   }>();
 
   let draft = '';
@@ -69,7 +70,7 @@
     <button type="button" class="ghost" aria-label="Emoji">
       <Icon name="mood" />
     </button>
-    <input bind:value={draft} placeholder="Message" aria-label="Message" />
+    <input bind:value={draft} placeholder="Message" aria-label="Message" on:input={() => dispatch('typing')} />
     <button type="button" class="ghost" aria-label="Attach media" on:click={() => (showAttachSheet = !showAttachSheet)}>
       <Icon name="attach_file" />
     </button>

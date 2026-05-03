@@ -1,9 +1,11 @@
 <script lang="ts">
   import type { ChatMessage, ChatSummary, ContactProfile, GroupMetadataPayload } from '$lib/api/types';
   import { appState, setChatEphemeralDefault } from '$lib/stores/app';
+  import { revokeMessage, editMessage, sendReaction, sendChatPresence, markChatRead } from '$lib/api/whatsmo';
   import ChatComposer from './ChatComposer.svelte';
   import Icon from './Icon.svelte';
   import MessageBubble from './MessageBubble.svelte';
+  import MessageContextMenu from './MessageContextMenu.svelte';
 
   export let chat: ChatSummary;
   export let messages: ChatMessage[] = [];
@@ -24,6 +26,14 @@
   let infoOpen = false;
   let timerOpen = false;
   let customTimerInput = '';
+  let contextMessage: ChatMessage | null = null;
+  let replyingTo: ChatMessage | null = null;
+  let editingMessage: ChatMessage | null = null;
+  let showReactionPicker = false;
+  let reactionTarget: ChatMessage | null = null;
+  let typingTimeout: number | undefined;
+
+  const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
   const TIMER_PRESETS = [
     { label: 'Off', seconds: 0 },
@@ -131,6 +141,76 @@
     const user = participant.id.split('@')[0]?.split(':')[0] ?? participant.id;
     return /^\d+$/.test(user) ? `+${user}` : user.includes('@lid') ? 'Unknown contact' : user;
   }
+
+  function openContextMenu(message: ChatMessage): void {
+    contextMessage = message;
+  }
+
+  function closeContextMenu(): void {
+    contextMessage = null;
+  }
+
+  async function handleCopyText(): Promise<void> {
+    if (contextMessage?.text) {
+      await navigator.clipboard.writeText(contextMessage.text);
+    }
+    closeContextMenu();
+  }
+
+  function handleReply(): void {
+    if (contextMessage) replyingTo = contextMessage;
+    closeContextMenu();
+  }
+
+  function cancelReply(): void {
+    replyingTo = null;
+  }
+
+  function handleReact(): void {
+    if (contextMessage) {
+      reactionTarget = contextMessage;
+      showReactionPicker = true;
+    }
+    closeContextMenu();
+  }
+
+  async function pickReaction(emoji: string): Promise<void> {
+    if (reactionTarget) {
+      await sendReaction(chat.id, reactionTarget.id, reactionTarget.senderId, emoji);
+    }
+    showReactionPicker = false;
+    reactionTarget = null;
+  }
+
+  async function handleDelete(): Promise<void> {
+    if (contextMessage?.fromMe) {
+      await revokeMessage(chat.id, contextMessage.id);
+    }
+    closeContextMenu();
+  }
+
+  function handleEdit(): void {
+    if (contextMessage?.fromMe && contextMessage.text) {
+      editingMessage = contextMessage;
+    }
+    closeContextMenu();
+  }
+
+  function cancelEdit(): void {
+    editingMessage = null;
+  }
+
+  function handleTyping(): void {
+    void sendChatPresence(chat.id, true);
+    window.clearTimeout(typingTimeout);
+    typingTimeout = window.setTimeout(() => {
+      void sendChatPresence(chat.id, false);
+    }, 3000);
+  }
+
+  $: if (chat.id !== currentChatId) {
+    void markChatRead(chat.id);
+  }
 </script>
 
 <section class="chat-window" aria-label="Conversation">
@@ -170,11 +250,44 @@
         onRetry={() => onRetry(chat.id, message.id)}
         onDownloadMedia={() => onDownloadMedia(chat.id, message.id)}
         onOpenMedia={openMedia}
+        onLongPress={openContextMenu}
       />
     {/each}
   </div>
 
-  <ChatComposer on:send={(event) => onSend(chat.id, event.detail)} on:attach={(event) => onAttach(chat.id, event.detail)} />
+  {#if replyingTo}
+    <div class="reply-bar">
+      <div class="reply-preview">
+        <strong>{replyingTo.senderName ?? 'Message'}</strong>
+        <span>{replyingTo.text ?? 'Media'}</span>
+      </div>
+      <button aria-label="Cancel reply" on:click={cancelReply}><Icon name="close" size="20px" /></button>
+    </div>
+  {/if}
+
+  {#if editingMessage}
+    <div class="reply-bar edit-bar">
+      <div class="reply-preview">
+        <strong>Editing</strong>
+        <span>{editingMessage.text}</span>
+      </div>
+      <button aria-label="Cancel edit" on:click={cancelEdit}><Icon name="close" size="20px" /></button>
+    </div>
+  {/if}
+
+  <ChatComposer
+    on:send={(event) => {
+      if (editingMessage) {
+        void editMessage(chat.id, editingMessage.id, event.detail);
+        editingMessage = null;
+      } else {
+        onSend(chat.id, event.detail);
+        replyingTo = null;
+      }
+    }}
+    on:attach={(event) => onAttach(chat.id, event.detail)}
+    on:typing={handleTyping}
+  />
 
   {#if timerOpen}
     <!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -335,6 +448,31 @@
           <button on:click={() => (imageZoom = Math.min(3, imageZoom + 0.25))}>+</button>
         </footer>
       {/if}
+    </div>
+  {/if}
+
+  {#if contextMessage}
+    <MessageContextMenu
+      message={contextMessage}
+      visible={true}
+      on:reply={handleReply}
+      on:react={handleReact}
+      on:copy={handleCopyText}
+      on:edit={handleEdit}
+      on:delete={handleDelete}
+      on:forward={() => { closeContextMenu(); }}
+      on:close={closeContextMenu}
+    />
+  {/if}
+
+  {#if showReactionPicker}
+    <div class="reaction-picker">
+      <button class="reaction-dismiss" aria-label="Close reactions" on:click={() => { showReactionPicker = false; reactionTarget = null; }}></button>
+      <div class="reaction-row">
+        {#each QUICK_REACTIONS as emoji}
+          <button on:click={() => pickReaction(emoji)}>{emoji}</button>
+        {/each}
+      </div>
     </div>
   {/if}
 </section>
@@ -915,6 +1053,96 @@
     font: inherit;
     font-weight: 600;
     cursor: pointer;
+  }
+
+  .reply-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-left: 3px solid var(--wa-green);
+    margin: 0 10px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--wa-green) 10%, var(--paper));
+  }
+
+  .reply-bar.edit-bar {
+    border-left-color: #f59e0b;
+  }
+
+  .reply-preview {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  .reply-preview strong {
+    font-size: 0.82rem;
+    color: var(--wa-green-dark);
+  }
+
+  .edit-bar .reply-preview strong {
+    color: #f59e0b;
+  }
+
+  .reply-preview span {
+    font-size: 0.84rem;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .reply-bar button {
+    width: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: 999px;
+    color: var(--muted);
+    background: transparent;
+    flex-shrink: 0;
+  }
+
+  .reaction-picker {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    display: grid;
+    place-items: center;
+    background: rgba(0, 0, 0, 0.3);
+  }
+
+  .reaction-dismiss {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .reaction-row {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
+    border-radius: 999px;
+    background: var(--paper);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+  }
+
+  .reaction-row button {
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 999px;
+    font-size: 1.5rem;
+    background: transparent;
+  }
+
+  .reaction-row button:active {
+    background: var(--nav-active);
+    transform: scale(1.2);
   }
 
   @keyframes slideUp {
