@@ -96,7 +96,7 @@
       {/if}
     </button>
   {/if}
-  {#if message.text && !message.deleted}
+  {#if message.text && !message.deleted && !message.deletedBySender}
     <p>{message.text}</p>
   {/if}
   {#if message.editHistory && message.editHistory.length > 0}
