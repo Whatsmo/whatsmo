@@ -12,44 +12,6 @@
     { value: 'system', label: 'System default', icon: 'desktop_windows' }
   ];
 
-  async function disconnectLocal(): Promise<void> {
-    busy = true;
-    try {
-      setConnection(await disconnectSession());
-      await refreshAccountDevice();
-    } catch (error) {
-      console.error('Failed to disconnect locally', error);
-    } finally {
-      busy = false;
-    }
-  }
-
-  async function unlinkDevice(): Promise<void> {
-    const confirmed = window.confirm(
-      'Unlink this Whatsmo companion from WhatsApp? You will need to pair again after this.'
-    );
-    if (!confirmed) return;
-
-    busy = true;
-    try {
-      setConnection(await logoutSession());
-      await refreshAccountDevice();
-    } catch (error) {
-      console.error('Failed to unlink device', error);
-    } finally {
-      busy = false;
-    }
-  }
-
-  // A simple deterministic gradient function for the profile avatar
-  function gradientFromName(name: string): string {
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) {
-      hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const h = Math.abs(hash) % 360;
-    return `linear-gradient(135deg, hsl(${h}, 70%, 60%), hsl(${(h + 40) % 360}, 70%, 45%))`;
-  }
 </script>
 
 <div class="settings-panel">
@@ -57,28 +19,7 @@
     <h2>Settings</h2>
   </header>
 
-  {#if $appState.auth.mode === 'connected' && $appState.account}
-    <section class="setting-group account-section">
-      <div class="account-profile">
-        <div class="avatar" style="background: {gradientFromName($appState.account.pushName || $appState.account.phoneJid || 'User')}">
-          <Icon name="person" size="40px" />
-        </div>
-        <div class="account-info">
-          <h3>{$appState.account.pushName ?? $appState.account.phoneJid ?? 'Linked account'}</h3>
-          <span class="detail">{$appState.account.phoneJid ?? 'Phone number hidden'}</span>
-          <span class="sub-detail">{$appState.account.lidJid ?? ''}</span>
-        </div>
-      </div>
-      <div class="account-actions">
-        <button class="action-btn disconnect-btn" disabled={busy} on:click={disconnectLocal}>
-          <Icon name="power_settings_new" size="20px" /> Stop locally
-        </button>
-        <button class="action-btn unlink-btn" disabled={busy} on:click={unlinkDevice}>
-          <Icon name="logout" size="20px" /> Unlink
-        </button>
-      </div>
-    </section>
-  {/if}
+
 
   <section class="setting-group">
     <h3>Theme</h3>
@@ -156,96 +97,7 @@
     letter-spacing: 0.05em;
   }
 
-  /* Account Section */
-  .account-profile {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    margin-bottom: 24px;
-  }
 
-  .avatar {
-    width: 64px;
-    height: 64px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    color: white;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  }
-
-  .account-info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .account-info h3 {
-    margin: 0;
-    font-size: 1.3rem;
-    font-weight: 600;
-    color: var(--ink);
-    text-transform: none;
-    letter-spacing: normal;
-  }
-
-  .account-info .detail {
-    font-size: 0.95rem;
-    color: var(--muted);
-  }
-
-  .account-info .sub-detail {
-    font-size: 0.8rem;
-    color: var(--muted);
-    opacity: 0.8;
-  }
-
-  .account-actions {
-    display: flex;
-    gap: 12px;
-  }
-
-  .action-btn {
-    flex: 1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 12px 16px;
-    border: none;
-    border-radius: 12px;
-    font-size: 0.95rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .action-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .action-btn:active {
-    transform: scale(0.97);
-  }
-
-  .disconnect-btn {
-    background: var(--nav-active);
-    color: var(--wa-green-dark);
-  }
-
-  .disconnect-btn:hover {
-    background: var(--wa-mint);
-  }
-
-  .unlink-btn {
-    background: rgba(234, 67, 53, 0.1);
-    color: #ea4335;
-  }
-
-  .unlink-btn:hover {
-    background: rgba(234, 67, 53, 0.15);
-  }
 
   /* Theme Options */
   .theme-options {
