@@ -29,7 +29,7 @@
     qrSvg = '';
   }
 
-  $: isConnecting = auth.mode === 'connecting' || busy;
+  $: isConnecting = auth.mode === 'connecting' || auth.mode === 'qr' || auth.mode === 'pair-code' || busy;
   $: isConnected = auth.mode === 'connected';
   $: statusLabel = isConnected
     ? account?.connected && account?.loggedIn ? 'Active' : account?.running ? 'Reconnecting' : 'Stopped'
