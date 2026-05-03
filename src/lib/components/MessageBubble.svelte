@@ -4,6 +4,8 @@
 
   export let message: ChatMessage;
   export let showSenderName = false;
+  export let senderAvatarUrl: string | undefined = undefined;
+  export let senderAvatarGradient: string | undefined = undefined;
   export let onRetry: (message: ChatMessage) => void = () => undefined;
   export let onDownloadMedia: (message: ChatMessage) => void = () => undefined;
   export let onOpenMedia: (message: ChatMessage) => void = () => undefined;
@@ -84,6 +86,16 @@
   }
 </script>
 
+<div class:bubble-row={showSenderName && !message.fromMe}>
+  {#if showSenderName && !message.fromMe}
+    <div class="sender-avatar" style={`background: ${senderAvatarGradient ?? 'var(--wa-green)'}`}>
+      {#if senderAvatarUrl}
+        <img src={senderAvatarUrl} alt="" referrerpolicy="no-referrer" />
+      {:else}
+        {(message.senderName ?? '?').slice(0, 1)}
+      {/if}
+    </div>
+  {/if}
 <article
   bind:this={bubbleEl}
   class:mine={message.fromMe}
@@ -213,6 +225,7 @@
     </div>
   {/if}
 </article>
+</div>
 
 <style>
   .bubble {
@@ -381,6 +394,32 @@
     color: var(--muted);
     font-weight: 600;
     margin-right: 4px;
+  }
+
+  .bubble-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .sender-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 700;
+    overflow: hidden;
+    margin-top: 2px;
+  }
+
+  .sender-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
 
   .sender-name {

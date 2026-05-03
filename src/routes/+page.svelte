@@ -188,7 +188,8 @@
     {#if activeScreen === 'chat' && $selectedChat}
       <ChatWindow
         chat={$selectedChat}
-        contact={$appState.contacts.find((contact) => contact.id === $selectedChat.id || contact.lid === $selectedChat.id) ?? null}
+        contact={$appState.contacts.find((c) => c.id === $selectedChat.id || c.lid === $selectedChat.id) ?? null}
+        contacts={$appState.contacts}
         group={$appState.groups[$selectedChat.id] ?? null}
         messages={$selectedMessages}
         onBack={() => setScreen('chats')}

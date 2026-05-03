@@ -431,19 +431,51 @@ pub async fn request_pair_code(
 
 /// Wraps a `wa::Message` in an ephemeral `FutureProofMessage` if a duration is provided.
 /// When `duration` is `None` or `Some(0)`, returns the original message unchanged.
-fn wrap_ephemeral(message: wa::Message, duration: Option<u32>) -> wa::Message {
+fn wrap_ephemeral(mut message: wa::Message, duration: Option<u32>) -> wa::Message {
     match duration {
-        Some(seconds) if seconds > 0 => wa::Message {
-            ephemeral_message: Some(Box::new(wa::message::FutureProofMessage {
-                message: Some(Box::new(message)),
-            })),
-            message_context_info: Some(wa::MessageContextInfo {
-                message_add_on_duration_in_secs: Some(seconds),
+        Some(seconds) if seconds > 0 => {
+            inject_expiration(&mut message, seconds);
+            wa::Message {
+                ephemeral_message: Some(Box::new(wa::message::FutureProofMessage {
+                    message: Some(Box::new(message)),
+                })),
+                message_context_info: Some(wa::MessageContextInfo {
+                    message_add_on_duration_in_secs: Some(seconds),
+                    ..Default::default()
+                }),
                 ..Default::default()
-            }),
-            ..Default::default()
-        },
+            }
+        }
         _ => message,
+    }
+}
+
+fn inject_expiration(message: &mut wa::Message, seconds: u32) {
+    if let Some(ref mut ext) = message.extended_text_message {
+        let ctx = ext.context_info.get_or_insert_with(|| Box::new(wa::ContextInfo::default()));
+        ctx.expiration = Some(seconds);
+    } else if message.conversation.is_some() {
+        let text = message.conversation.take();
+        message.extended_text_message = Some(Box::new(wa::message::ExtendedTextMessage {
+            text,
+            context_info: Some(Box::new(wa::ContextInfo {
+                expiration: Some(seconds),
+                ..Default::default()
+            })),
+            ..Default::default()
+        }));
+    } else if let Some(ref mut img) = message.image_message {
+        let ctx = img.context_info.get_or_insert_with(|| Box::new(wa::ContextInfo::default()));
+        ctx.expiration = Some(seconds);
+    } else if let Some(ref mut vid) = message.video_message {
+        let ctx = vid.context_info.get_or_insert_with(|| Box::new(wa::ContextInfo::default()));
+        ctx.expiration = Some(seconds);
+    } else if let Some(ref mut doc) = message.document_message {
+        let ctx = doc.context_info.get_or_insert_with(|| Box::new(wa::ContextInfo::default()));
+        ctx.expiration = Some(seconds);
+    } else if let Some(ref mut aud) = message.audio_message {
+        let ctx = aud.context_info.get_or_insert_with(|| Box::new(wa::ContextInfo::default()));
+        ctx.expiration = Some(seconds);
     }
 }
 

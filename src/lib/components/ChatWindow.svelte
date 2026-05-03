@@ -10,6 +10,7 @@
   export let chat: ChatSummary;
   export let messages: ChatMessage[] = [];
   export let contact: ContactProfile | null = null;
+  export let contacts: ContactProfile[] = [];
   export let group: GroupMetadataPayload | null = null;
   export let onBack: () => void = () => undefined;
   export let onSend: (chatId: string, text: string, quotedMessage?: ChatMessage) => void;
@@ -30,6 +31,9 @@
   let replyingTo: ChatMessage | null = null;
   let scrollAnchor: HTMLElement;
   let messageFieldEl: HTMLElement;
+  let showScrollTop = false;
+  let showScrollBottom = false;
+  let scrollHideTimer: number | undefined;
   let editingMessage: ChatMessage | null = null;
   let showReactionPicker = false;
   let reactionTarget: ChatMessage | null = null;
@@ -84,6 +88,18 @@
 
   function scrollToTop(): void {
     messageFieldEl?.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function handleScroll(): void {
+    if (!messageFieldEl) return;
+    const { scrollTop, scrollHeight, clientHeight } = messageFieldEl;
+    showScrollTop = scrollTop > 200;
+    showScrollBottom = scrollTop < scrollHeight - clientHeight - 200;
+    window.clearTimeout(scrollHideTimer);
+    scrollHideTimer = window.setTimeout(() => {
+      showScrollTop = false;
+      showScrollBottom = false;
+    }, 2500);
   }
 
   $: hiddenMessageCount = Math.max(messages.length - visibleMessageCount, 0);
@@ -247,7 +263,7 @@
     <button class="icon" aria-label="Chat info" on:click={() => (infoOpen = true)}><Icon name="more" /></button>
   </header>
 
-  <div class="message-field" bind:this={messageFieldEl}>
+  <div class="message-field" bind:this={messageFieldEl} on:scroll={handleScroll}>
     {#if hiddenMessageCount > 0}
       <button class="load-older" on:click={loadOlderMessages}>
         Load {Math.min(hiddenMessageCount, MESSAGE_PAGE_SIZE)} older messages
@@ -257,25 +273,34 @@
     {#each visibleMessages as message, i (message.id)}
       {@const prevMessage = visibleMessages[i - 1]}
       {@const isNewSender = !prevMessage || prevMessage.senderId !== message.senderId || prevMessage.fromMe !== message.fromMe}
+      {@const senderContact = chat.kind === 'group' && !message.fromMe ? contacts.find((c) => c.id === message.senderId || c.lid === message.senderId) : null}
       <div class:sender-gap={isNewSender && i > 0} class="msg-wrap">
         <MessageBubble
           {message}
           showSenderName={chat.kind === 'group' && !message.fromMe && isNewSender}
+          senderAvatarUrl={senderContact?.avatarUrl}
+          senderAvatarGradient={senderContact?.avatarGradient}
           onRetry={() => onRetry(chat.id, message.id)}
           onDownloadMedia={() => onDownloadMedia(chat.id, message.id)}
           onOpenMedia={openMedia}
           onLongPress={openContextMenu}
-          onSwipeReply={(msg) => { replyingTo = msg; }}
+          onSwipeReply={(msg: ChatMessage) => { replyingTo = msg; }}
         />
       </div>
     {/each}
     <div bind:this={scrollAnchor}></div>
   </div>
 
-  <div class="scroll-buttons">
-    <button aria-label="Scroll to top" on:click={scrollToTop}><Icon name="keyboard_arrow_up" /></button>
-    <button aria-label="Scroll to bottom" on:click={scrollToBottom}><Icon name="keyboard_arrow_down" /></button>
-  </div>
+  {#if showScrollTop || showScrollBottom}
+    <div class="scroll-buttons">
+      {#if showScrollTop}
+        <button aria-label="Scroll to top" on:click={scrollToTop}><Icon name="keyboard_arrow_up" /></button>
+      {/if}
+      {#if showScrollBottom}
+        <button aria-label="Scroll to bottom" on:click={scrollToBottom}><Icon name="keyboard_arrow_down" /></button>
+      {/if}
+    </div>
+  {/if}
 
   {#if replyingTo}
     <div class="reply-bar">
