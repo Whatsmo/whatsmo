@@ -8,10 +8,16 @@
   export let onDownloadMedia: (message: ChatMessage) => void = () => undefined;
   export let onOpenMedia: (message: ChatMessage) => void = () => undefined;
   export let onLongPress: (message: ChatMessage) => void = () => undefined;
+  export let onSwipeReply: (message: ChatMessage) => void = () => undefined;
 
   const LONG_PRESS_MS = 420;
+  const SWIPE_THRESHOLD = 64;
   let longPressTimer: number | undefined;
   let suppressClick = false;
+  let swipeStartX = 0;
+  let swipeOffsetX = 0;
+  let isSwiping = false;
+  let bubbleEl: HTMLElement;
 
   function startLongPress(): void {
     window.clearTimeout(longPressTimer);
@@ -23,6 +29,31 @@
 
   function cancelLongPress(): void {
     window.clearTimeout(longPressTimer);
+  }
+
+  function handleTouchStart(event: TouchEvent): void {
+    swipeStartX = event.touches[0].clientX;
+    swipeOffsetX = 0;
+    isSwiping = false;
+  }
+
+  function handleTouchMove(event: TouchEvent): void {
+    const dx = event.touches[0].clientX - swipeStartX;
+    if (dx > 12) {
+      isSwiping = true;
+      cancelLongPress();
+      swipeOffsetX = Math.min(dx, 100);
+      if (bubbleEl) bubbleEl.style.transform = `translateX(${swipeOffsetX}px)`;
+    }
+  }
+
+  function handleTouchEnd(): void {
+    if (isSwiping && swipeOffsetX >= SWIPE_THRESHOLD) {
+      onSwipeReply(message);
+    }
+    isSwiping = false;
+    swipeOffsetX = 0;
+    if (bubbleEl) bubbleEl.style.transform = '';
   }
 
   const formatter = new Intl.DateTimeFormat('en', { hour: '2-digit', minute: '2-digit' });
@@ -43,9 +74,18 @@
       onDownloadMedia(message);
     }
   }
+
+  function groupedReactions(reactions: Array<{ emoji: string; senderId: string }>): Array<{ emoji: string; count: number }> {
+    const map = new Map<string, number>();
+    for (const r of reactions) {
+      map.set(r.emoji, (map.get(r.emoji) ?? 0) + 1);
+    }
+    return Array.from(map.entries()).map(([emoji, count]) => ({ emoji, count }));
+  }
 </script>
 
 <article
+  bind:this={bubbleEl}
   class:mine={message.fromMe}
   class:sticker={isSticker}
   class="bubble"
@@ -54,9 +94,22 @@
   on:pointerleave={cancelLongPress}
   on:pointercancel={cancelLongPress}
   on:contextmenu|preventDefault={() => onLongPress(message)}
+  on:touchstart={handleTouchStart}
+  on:touchmove={handleTouchMove}
+  on:touchend={handleTouchEnd}
 >
   {#if showSenderName && message.senderName}
     <p class="sender-name">{message.senderName}</p>
+  {/if}
+  {#if message.quotedText || message.quotedSenderName}
+    <div class="quoted-preview">
+      {#if message.quotedSenderName}
+        <strong>{message.quotedSenderName}</strong>
+      {/if}
+      {#if message.quotedText}
+        <span>{message.quotedText}</span>
+      {/if}
+    </div>
   {/if}
   {#if message.deleted && !message.deletedBySender}
     <p class="deleted">{message.text ?? 'This message was deleted.'}</p>
@@ -152,6 +205,13 @@
   {#if canRetry}
     <button class="retry-button" on:click={() => onRetry(message)}>Retry</button>
   {/if}
+  {#if message.reactions && message.reactions.length > 0}
+    <div class="reaction-chips">
+      {#each groupedReactions(message.reactions) as reaction}
+        <span class="reaction-chip">{reaction.emoji} {reaction.count > 1 ? reaction.count : ''}</span>
+      {/each}
+    </div>
+  {/if}
 </article>
 
 <style>
@@ -168,6 +228,8 @@
     overflow-wrap: break-word;
     position: relative;
     margin-left: 8px;
+    transition: transform 180ms ease;
+    touch-action: pan-y;
   }
 
   .bubble::before {
@@ -328,6 +390,31 @@
     font-weight: 500;
   }
 
+  .quoted-preview {
+    display: grid;
+    gap: 2px;
+    margin-bottom: 6px;
+    padding: 6px 10px;
+    border-left: 3px solid var(--wa-green);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+    overflow: hidden;
+  }
+
+  .quoted-preview strong {
+    color: var(--wa-green-dark);
+    font-size: 0.78rem;
+  }
+
+  .quoted-preview span {
+    color: var(--muted);
+    font-size: 0.82rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 220px;
+  }
+
   .retry-button {
     display: inline-flex;
     align-items: center;
@@ -343,6 +430,23 @@
     font-weight: 500;
     background: #ea4335;
     cursor: pointer;
+  }
+
+  .reaction-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+  }
+
+  .reaction-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    background: color-mix(in srgb, var(--ink) 8%, transparent);
   }
 
   .media-card {

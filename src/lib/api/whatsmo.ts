@@ -20,6 +20,7 @@ import type {
   HistorySyncPayload,
   HistorySyncProgressPayload,
   IncomingMessagePayload,
+  IncomingReactionPayload,
   MediaKind,
   OutgoingMediaPayload,
   OutgoingMessagePayload,
@@ -118,7 +119,14 @@ export async function resumeSavedSession(): Promise<SessionStatusPayload> {
   return invoke<SessionStatusPayload>('resume_saved_session');
 }
 
-export async function sendTextMessage(chatId: string, text: string, ephemeralDuration?: number, quotedMessageId?: string): Promise<OutgoingMessagePayload> {
+export async function sendTextMessage(
+  chatId: string,
+  text: string,
+  ephemeralDuration?: number,
+  quotedMessageId?: string,
+  quotedSender?: string,
+  quotedText?: string
+): Promise<OutgoingMessagePayload> {
   if (!isTauriRuntime()) {
     return {
       id: crypto.randomUUID(),
@@ -128,7 +136,7 @@ export async function sendTextMessage(chatId: string, text: string, ephemeralDur
     };
   }
 
-  return invoke<OutgoingMessagePayload>('send_text_message', { chatId, text, ephemeralDuration, quotedMessageId });
+  return invoke<OutgoingMessagePayload>('send_text_message', { chatId, text, ephemeralDuration, quotedMessageId, quotedSender, quotedText });
 }
 
 export async function revokeMessage(chatId: string, messageId: string): Promise<void> {
@@ -424,6 +432,7 @@ export interface BridgeHandlers {
   onAuth: (payload: AuthPayload) => void;
   onConnection: (payload: ConnectionPayload) => void;
   onMessage: (payload: IncomingMessagePayload) => void;
+  onReaction: (payload: IncomingReactionPayload) => void;
   onHistorySync: (payload: HistorySyncPayload) => void;
   onHistoryProgress: (payload: HistorySyncProgressPayload) => void;
   onContactUpdated: (payload: ContactUpdatedPayload) => void;
@@ -442,6 +451,7 @@ export async function connectBridge(handlers: BridgeHandlers): Promise<UnlistenF
     listen<AuthPayload>('whatsmo://auth', (event) => handlers.onAuth(event.payload)),
     listen<ConnectionPayload>('whatsmo://connection', (event) => handlers.onConnection(event.payload)),
     listen<IncomingMessagePayload>('whatsmo://message', (event) => handlers.onMessage(event.payload)),
+    listen<IncomingReactionPayload>('whatsmo://reaction', (event) => handlers.onReaction(event.payload)),
     listen<HistorySyncPayload>('whatsmo://history-sync', (event) => handlers.onHistorySync(event.payload)),
     listen<HistorySyncProgressPayload>('whatsmo://history-progress', (event) => handlers.onHistoryProgress(event.payload)),
     listen<ContactUpdatedPayload>('whatsmo://contact-updated', (event) => handlers.onContactUpdated(event.payload)),

@@ -140,6 +140,15 @@ pub struct AccountDevicePayload {
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct IncomingReactionPayload {
+    chat_id: String,
+    target_message_id: String,
+    sender_id: String,
+    emoji: String,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct IncomingMessagePayload {
     id: String,
     chat_id: String,
@@ -156,6 +165,12 @@ pub struct IncomingMessagePayload {
     target_message_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     media: Option<MediaAttachmentPayload>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    quoted_message_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    quoted_sender_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    quoted_text: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -439,6 +454,8 @@ pub async fn send_text_message(
     text: String,
     ephemeral_duration: Option<u32>,
     quoted_message_id: Option<String>,
+    quoted_sender: Option<String>,
+    quoted_text: Option<String>,
 ) -> CommandResult<OutgoingMessagePayload> {
     let trimmed = text.trim().to_string();
     if trimmed.is_empty() {
@@ -451,14 +468,22 @@ pub async fn send_text_message(
         .map_err(|error| format!("Invalid chat id: {error}"))?;
 
     let inner_message = if let Some(qid) = quoted_message_id {
+        let sender = quoted_sender.unwrap_or_else(|| chat_id.clone());
+        let sender_jid = sender.parse::<Jid>().unwrap_or_else(|_| jid.clone());
+        let quoted_msg = wa::Message {
+            conversation: quoted_text,
+            ..Default::default()
+        };
+        let context_info = wacore::proto_helpers::build_quote_context_with_info(
+            qid,
+            &sender_jid,
+            &jid,
+            &quoted_msg,
+        );
         wa::Message {
             extended_text_message: Some(Box::new(wa::message::ExtendedTextMessage {
                 text: Some(trimmed.clone()),
-                context_info: Some(Box::new(wa::ContextInfo {
-                    stanza_id: Some(qid),
-                    participant: Some(chat_id.clone()),
-                    ..Default::default()
-                })),
+                context_info: Some(Box::new(context_info)),
                 ..Default::default()
             })),
             ..Default::default()
@@ -1455,16 +1480,37 @@ async fn start_session(
                     }
                     Event::Message(message, info) => {
                         let chat_id = info.source.chat.to_string();
+
+                        if let Some(reaction) = message.get_base_message().reaction_message.as_ref()
+                        {
+                            if let Some(key) = &reaction.key {
+                                let target_id = key.id.clone().unwrap_or_default();
+                                let sender = preferred_sender_jid(
+                                    &info.source.sender,
+                                    info.source.sender_alt.as_ref(),
+                                )
+                                .to_string();
+                                emit_event(
+                                    &app,
+                                    "whatsmo://reaction",
+                                    IncomingReactionPayload {
+                                        chat_id: chat_id.clone(),
+                                        target_message_id: target_id,
+                                        sender_id: sender,
+                                        emoji: reaction.text.clone().unwrap_or_default(),
+                                    },
+                                );
+                            }
+                            return;
+                        }
+
                         let event_kind = message_event_kind(&info.edit);
 
                         // wacore may not populate meta_info.target_id for edit/revoke events.
                         // Fall back to the ProtocolMessage.key.id which carries the original
                         // message ID for both edits (MessageEdit) and revokes (Revoke).
-                        let mut target_id = info
-                            .meta_info
-                            .target_id
-                            .as_ref()
-                            .map(ToString::to_string);
+                        let mut target_id =
+                            info.meta_info.target_id.as_ref().map(ToString::to_string);
 
                         // For edits, the new text is inside ProtocolMessage.edited_message.
                         // text_content() won't find it because it only looks at the top-level
@@ -1486,13 +1532,14 @@ async fn start_session(
                             // For edits: extract the new text from the edited_message field
                             if resolved_text.is_none() {
                                 if let Some(ref edited_msg) = proto.edited_message {
-                                    resolved_text = edited_msg
-                                        .text_content()
-                                        .map(ToString::to_string);
+                                    resolved_text =
+                                        edited_msg.text_content().map(ToString::to_string);
                                 }
                             }
                         }
 
+                        let (quoted_id, quoted_sender, quoted_text_val) =
+                            extract_quote_context(&message);
                         let payload = IncomingMessagePayload {
                             id: info.id.to_string(),
                             chat_id: chat_id.clone(),
@@ -1509,6 +1556,9 @@ async fn start_session(
                             event_kind,
                             target_message_id: target_id,
                             media: media_attachment_payload(&info.id.to_string(), &message),
+                            quoted_message_id: quoted_id,
+                            quoted_sender_name: quoted_sender,
+                            quoted_text: quoted_text_val,
                         };
                         emit_event(&app, "whatsmo://message", payload);
                     }
@@ -1850,6 +1900,7 @@ fn history_message_payload(
         .map(ToString::to_string)
         .or_else(|| message.get_caption().map(ToString::to_string));
 
+    let (quoted_id, quoted_sender, quoted_text_val) = extract_quote_context(message);
     Some(IncomingMessagePayload {
         id: id.clone(),
         chat_id,
@@ -1865,6 +1916,9 @@ fn history_message_payload(
         event_kind: MessageEventKind::Message,
         target_message_id: None,
         media: media_attachment_payload(&id, message),
+        quoted_message_id: quoted_id,
+        quoted_sender_name: quoted_sender,
+        quoted_text: quoted_text_val,
     })
 }
 
@@ -1879,6 +1933,43 @@ fn non_empty_string(value: &str) -> Option<String> {
 
 fn non_empty_option_string(value: Option<&str>) -> Option<String> {
     value.and_then(non_empty_string)
+}
+
+fn extract_quote_context(
+    message: &wa::Message,
+) -> (Option<String>, Option<String>, Option<String>) {
+    let base = message.get_base_message();
+    let ctx = base
+        .extended_text_message
+        .as_ref()
+        .and_then(|ext| ext.context_info.as_ref())
+        .or_else(|| {
+            base.image_message
+                .as_ref()
+                .and_then(|img| img.context_info.as_ref())
+        })
+        .or_else(|| {
+            base.video_message
+                .as_ref()
+                .and_then(|vid| vid.context_info.as_ref())
+        });
+
+    let Some(ctx) = ctx else {
+        return (None, None, None);
+    };
+
+    let stanza_id = ctx.stanza_id.clone().filter(|s| !s.is_empty());
+    if stanza_id.is_none() {
+        return (None, None, None);
+    }
+
+    let participant = ctx.participant.clone();
+    let quoted_text = ctx
+        .quoted_message
+        .as_ref()
+        .and_then(|qm| qm.text_content().map(ToString::to_string));
+
+    (stanza_id, participant, quoted_text)
 }
 
 fn preferred_sender_jid<'a>(sender: &'a Jid, sender_alt: Option<&'a Jid>) -> &'a Jid {

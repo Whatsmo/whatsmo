@@ -18,6 +18,7 @@
     handleContactSyncRequested,
     handleContactUpdated,
     ingestHistorySync,
+    applyIncomingReaction,
     ingestIncomingMessage,
     refreshAccountDevice,
     requestNotifications,
@@ -70,6 +71,7 @@
         if (payload.connected) void refreshAccountDevice();
       },
       onMessage: ingestIncomingMessage,
+      onReaction: applyIncomingReaction,
       onHistorySync: ingestHistorySync,
       onHistoryProgress: setHistoryProgress,
       onContactUpdated: handleContactUpdated,
@@ -190,7 +192,7 @@
         group={$appState.groups[$selectedChat.id] ?? null}
         messages={$selectedMessages}
         onBack={() => setScreen('chats')}
-        onSend={sendMessage}
+        onSend={(chatId, text, quoted) => sendMessage(chatId, text, { quotedMessage: quoted })}
         onRetry={retryMessage}
         onDownloadMedia={downloadAttachment}
         onAttach={handleAttachment}

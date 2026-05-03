@@ -12,7 +12,7 @@
   export let contact: ContactProfile | null = null;
   export let group: GroupMetadataPayload | null = null;
   export let onBack: () => void = () => undefined;
-  export let onSend: (chatId: string, text: string) => void;
+  export let onSend: (chatId: string, text: string, quotedMessage?: ChatMessage) => void;
   export let onRetry: (chatId: string, messageId: string) => void = () => undefined;
   export let onDownloadMedia: (chatId: string, messageId: string) => void = () => undefined;
   export let onAttach: (chatId: string, file: File) => void;
@@ -28,6 +28,8 @@
   let customTimerInput = '';
   let contextMessage: ChatMessage | null = null;
   let replyingTo: ChatMessage | null = null;
+  let scrollAnchor: HTMLElement;
+  let messageFieldEl: HTMLElement;
   let editingMessage: ChatMessage | null = null;
   let showReactionPicker = false;
   let reactionTarget: ChatMessage | null = null;
@@ -73,6 +75,15 @@
     currentChatId = chat.id;
     visibleMessageCount = MESSAGE_PAGE_SIZE;
     infoOpen = false;
+    setTimeout(scrollToBottom, 50);
+  }
+
+  function scrollToBottom(): void {
+    scrollAnchor?.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function scrollToTop(): void {
+    messageFieldEl?.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   $: hiddenMessageCount = Math.max(messages.length - visibleMessageCount, 0);
@@ -236,23 +247,34 @@
     <button class="icon" aria-label="Chat info" on:click={() => (infoOpen = true)}><Icon name="more" /></button>
   </header>
 
-  <div class="message-field">
+  <div class="message-field" bind:this={messageFieldEl}>
     {#if hiddenMessageCount > 0}
       <button class="load-older" on:click={loadOlderMessages}>
         Load {Math.min(hiddenMessageCount, MESSAGE_PAGE_SIZE)} older messages
       </button>
     {/if}
     <div class="day-chip">Today</div>
-    {#each visibleMessages as message (message.id)}
-      <MessageBubble
-        {message}
-        showSenderName={chat.kind === 'group' && !message.fromMe}
-        onRetry={() => onRetry(chat.id, message.id)}
-        onDownloadMedia={() => onDownloadMedia(chat.id, message.id)}
-        onOpenMedia={openMedia}
-        onLongPress={openContextMenu}
-      />
+    {#each visibleMessages as message, i (message.id)}
+      {@const prevMessage = visibleMessages[i - 1]}
+      {@const isNewSender = !prevMessage || prevMessage.senderId !== message.senderId || prevMessage.fromMe !== message.fromMe}
+      <div class:sender-gap={isNewSender && i > 0} class="msg-wrap">
+        <MessageBubble
+          {message}
+          showSenderName={chat.kind === 'group' && !message.fromMe && isNewSender}
+          onRetry={() => onRetry(chat.id, message.id)}
+          onDownloadMedia={() => onDownloadMedia(chat.id, message.id)}
+          onOpenMedia={openMedia}
+          onLongPress={openContextMenu}
+          onSwipeReply={(msg) => { replyingTo = msg; }}
+        />
+      </div>
     {/each}
+    <div bind:this={scrollAnchor}></div>
+  </div>
+
+  <div class="scroll-buttons">
+    <button aria-label="Scroll to top" on:click={scrollToTop}><Icon name="keyboard_arrow_up" /></button>
+    <button aria-label="Scroll to bottom" on:click={scrollToBottom}><Icon name="keyboard_arrow_down" /></button>
   </div>
 
   {#if replyingTo}
@@ -281,7 +303,7 @@
         void editMessage(chat.id, editingMessage.id, event.detail);
         editingMessage = null;
       } else {
-        onSend(chat.id, event.detail);
+        onSend(chat.id, event.detail, replyingTo ?? undefined);
         replyingTo = null;
       }
     }}
@@ -581,13 +603,39 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     align-content: start;
-    gap: 4px;
+    gap: 2px;
     min-width: 0;
     min-height: 0;
     width: 100%;
     overflow-y: auto;
     overflow-x: hidden;
     padding: 16px 16px 12px;
+  }
+
+  .msg-wrap.sender-gap {
+    padding-top: 10px;
+  }
+
+  .scroll-buttons {
+    position: absolute;
+    right: 12px;
+    bottom: 72px;
+    z-index: 6;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .scroll-buttons button {
+    width: 38px;
+    height: 38px;
+    border: 0;
+    border-radius: 999px;
+    color: var(--ink);
+    background: var(--paper);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    display: grid;
+    place-items: center;
   }
 
   .day-chip {

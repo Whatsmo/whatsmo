@@ -27,6 +27,20 @@
     draft = '';
   }
 
+  function handlePaste(event: ClipboardEvent): void {
+    const items = event.clipboardData?.items;
+    if (!items) return;
+
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        event.preventDefault();
+        const file = item.getAsFile();
+        if (file) dispatch('attach', file);
+        return;
+      }
+    }
+  }
+
   function openFilePicker(input: HTMLInputElement): void {
     showAttachSheet = false;
     input.click();
@@ -70,7 +84,7 @@
     <button type="button" class="ghost" aria-label="Emoji">
       <Icon name="mood" />
     </button>
-    <input bind:value={draft} placeholder="Message" aria-label="Message" on:input={() => dispatch('typing')} />
+    <input bind:value={draft} placeholder="Message" aria-label="Message" on:input={() => dispatch('typing')} on:paste={handlePaste} />
     <button type="button" class="ghost" aria-label="Attach media" on:click={() => (showAttachSheet = !showAttachSheet)}>
       <Icon name="attach_file" />
     </button>

@@ -150,6 +150,16 @@ export interface IncomingMessagePayload {
   eventKind: MessageEventKind;
   targetMessageId?: string;
   media?: MediaAttachment;
+  quotedMessageId?: string;
+  quotedSenderName?: string;
+  quotedText?: string;
+}
+
+export interface IncomingReactionPayload {
+  chatId: string;
+  targetMessageId: string;
+  senderId: string;
+  emoji: string;
 }
 
 export interface HistorySyncPayload {

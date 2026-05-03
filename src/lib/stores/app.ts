@@ -17,6 +17,7 @@ import type {
   HistorySyncPayload,
   HistorySyncProgressPayload,
   IncomingMessagePayload,
+  IncomingReactionPayload,
   MediaAttachment,
   MediaKind,
   ReceiptPayload,
@@ -503,13 +504,19 @@ export function handleContactNumberChanged(payload: ContactNumberChangedPayload)
   void syncKnownContactProfiles([newId, payload.newLid].filter(Boolean) as string[]);
 }
 
-export async function sendMessage(chatId: string, text: string, ephemeralOverride?: number): Promise<void> {
+export interface SendMessageOptions {
+  ephemeralOverride?: number;
+  quotedMessage?: ChatMessage;
+}
+
+export async function sendMessage(chatId: string, text: string, options?: SendMessageOptions): Promise<void> {
   const trimmed = text.trim();
   if (!trimmed) {
     return;
   }
 
-  const duration = ephemeralOverride ?? get(appState).chatEphemeralDefaults[chatId] ?? undefined;
+  const duration = options?.ephemeralOverride ?? get(appState).chatEphemeralDefaults[chatId] ?? undefined;
+  const quoted = options?.quotedMessage;
 
   const optimistic: ChatMessage = {
     id: crypto.randomUUID(),
@@ -519,13 +526,23 @@ export async function sendMessage(chatId: string, text: string, ephemeralOverrid
     text: trimmed,
     timestamp: Date.now(),
     fromMe: true,
-    status: 'queued'
+    status: 'queued',
+    quotedMessageId: quoted?.id,
+    quotedSenderName: quoted?.senderName,
+    quotedText: quoted?.text
   };
 
   appendMessage(optimistic);
 
   try {
-    const sent = await sendTextMessage(chatId, trimmed, duration);
+    const sent = await sendTextMessage(
+      chatId,
+      trimmed,
+      duration,
+      quoted?.id,
+      quoted?.senderId,
+      quoted?.text
+    );
     markMessageStatus(chatId, optimistic.id, 'sent', sent.id);
   } catch (error) {
     markMessageStatus(chatId, optimistic.id, 'failed');
@@ -715,7 +732,10 @@ export function ingestIncomingMessage(payload: IncomingMessagePayload): void {
     timestamp: payload.timestampMs,
     fromMe: payload.fromMe,
     status: payload.fromMe ? 'sent' : 'delivered',
-    media: normalizeMediaAttachment(payload.media)
+    media: normalizeMediaAttachment(payload.media),
+    quotedMessageId: payload.quotedMessageId,
+    quotedSenderName: payload.quotedSenderName,
+    quotedText: payload.quotedText
   };
 
   if (payload.chatId === 'status@broadcast') {
@@ -952,6 +972,22 @@ export function setHistoryProgress(payload: HistorySyncProgressPayload): void {
   appState.update((state) => ({ ...state, historySync: payload }));
 }
 
+export function applyIncomingReaction(payload: { chatId: string; targetMessageId: string; senderId: string; emoji: string }): void {
+  appState.update((state) => ({
+    ...state,
+    messages: {
+      ...state.messages,
+      [payload.chatId]: (state.messages[payload.chatId] ?? []).map((msg) => {
+        if (msg.id !== payload.targetMessageId) return msg;
+        const existing = msg.reactions ?? [];
+        const filtered = existing.filter((r) => r.senderId !== payload.senderId);
+        const reactions = payload.emoji ? [...filtered, { emoji: payload.emoji, senderId: payload.senderId }] : filtered;
+        return { ...msg, reactions };
+      })
+    }
+  }));
+}
+
 export function setTyping(payload: TypingPayload): void {
   const timerKey = `${payload.chatId}:${payload.name}`;
   if (typeof window !== 'undefined') {
@@ -1086,7 +1122,10 @@ function messageFromIncomingPayload(payload: IncomingMessagePayload): ChatMessag
     timestamp: payload.timestampMs,
     fromMe: payload.fromMe,
     status: payload.fromMe ? 'sent' : 'delivered',
-    media: normalizeMediaAttachment(payload.media)
+    media: normalizeMediaAttachment(payload.media),
+    quotedMessageId: payload.quotedMessageId,
+    quotedSenderName: payload.quotedSenderName,
+    quotedText: payload.quotedText
   };
 }
 
@@ -1456,7 +1495,19 @@ function resolveMessageSenderName(state: AppModel, senderId: string, providedNam
     return providedName;
   }
 
-  return resolveSenderNameFromContacts(state.contacts, senderId, providedName);
+  const fromContacts = resolveSenderNameFromContacts(state.contacts, senderId, providedName);
+  if (fromContacts !== 'Unknown contact' && !isRawIdentifierName(fromContacts) && !fromContacts.startsWith('+')) {
+    return fromContacts;
+  }
+
+  for (const chatMessages of Object.values(state.messages)) {
+    const known = chatMessages.find(
+      (msg) => msg.senderId === senderId && msg.senderName && !isRawIdentifierName(msg.senderName) && !msg.senderName.startsWith('+')
+    );
+    if (known?.senderName) return known.senderName;
+  }
+
+  return fromContacts;
 }
 
 function resolveSenderNameFromContacts(
