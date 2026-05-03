@@ -118,7 +118,7 @@ export async function resumeSavedSession(): Promise<SessionStatusPayload> {
   return invoke<SessionStatusPayload>('resume_saved_session');
 }
 
-export async function sendTextMessage(chatId: string, text: string, ephemeralDuration?: number): Promise<OutgoingMessagePayload> {
+export async function sendTextMessage(chatId: string, text: string, ephemeralDuration?: number, quotedMessageId?: string): Promise<OutgoingMessagePayload> {
   if (!isTauriRuntime()) {
     return {
       id: crypto.randomUUID(),
@@ -128,7 +128,32 @@ export async function sendTextMessage(chatId: string, text: string, ephemeralDur
     };
   }
 
-  return invoke<OutgoingMessagePayload>('send_text_message', { chatId, text, ephemeralDuration });
+  return invoke<OutgoingMessagePayload>('send_text_message', { chatId, text, ephemeralDuration, quotedMessageId });
+}
+
+export async function revokeMessage(chatId: string, messageId: string): Promise<void> {
+  if (!isTauriRuntime()) return;
+  return invoke<void>('revoke_message', { chatId, messageId });
+}
+
+export async function editMessage(chatId: string, messageId: string, newText: string): Promise<void> {
+  if (!isTauriRuntime()) return;
+  return invoke<void>('edit_message', { chatId, messageId, newText });
+}
+
+export async function sendReaction(chatId: string, messageId: string, senderId: string, emoji: string): Promise<void> {
+  if (!isTauriRuntime()) return;
+  return invoke<void>('send_reaction', { chatId, messageId, senderId, emoji });
+}
+
+export async function sendChatPresence(chatId: string, composing: boolean): Promise<void> {
+  if (!isTauriRuntime()) return;
+  return invoke<void>('send_chat_presence', { chatId, composing });
+}
+
+export async function markChatRead(chatId: string): Promise<void> {
+  if (!isTauriRuntime()) return;
+  return invoke<void>('mark_chat_read', { chatId });
 }
 
 export async function sendMediaMessage(
