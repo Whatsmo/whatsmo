@@ -97,9 +97,17 @@ Legend:
 - [x] Real chat search/filtering for title, subtitle, chat ID, unread chats, and groups
 - [x] Group metadata sync for subject, participant/admin counts, announcement/locked state, description, and participant list
 - [x] Message edit and delete/revoke handling for live message events
-- [ ] Quoted replies, reactions, forwarded labels, polls, location, contacts, and stickers
+- [x] Quoted replies with context info sent via `ContextInfo.stanza_id`
+- [x] Emoji reactions via `ReactionMessage` with quick-pick UI
+- [x] Delete own messages for everyone via `revoke_message`
+- [x] Edit own messages via `edit_message`
+- [x] Outgoing typing indicator via `client.chatstate().send_composing/send_paused`
+- [x] Mark chat as read via `client.mark_as_read`
+- [x] Message context menu with long-press (reply, react, copy, edit, delete, forward)
+- [x] Mobile touch guards: disabled pinch-zoom and text selection on non-input elements
+- [ ] Forwarded labels, polls, location, contacts rendering
 - [x] Text-message offline queue/retry for failed or queued outgoing messages
-- [ ] Send message with custom disappearing duration
+- [x] Send message with custom disappearing duration
 
 ### Contacts and profiles
 
