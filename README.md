@@ -171,6 +171,15 @@ Legend:
 - [x] Better onboarding/error states for failed pair-code or QR flows
 - [ ] Accessibility pass: labels, focus order, contrast, larger text support
 - [x] Loading skeletons and progress indicators for network-heavy operations
+- [x] Group message sender avatars next to bubbles
+- [x] Sender grouping: consecutive same-sender messages share one name/avatar block with larger gap between senders
+- [x] Swipe-to-reply gesture on message bubbles
+- [x] Quoted reply preview rendered inside message bubbles
+- [x] Incoming reaction emoji chips rendered below messages
+- [x] Auto-scroll to latest message on chat open
+- [x] Conditional scroll-to-top/bottom buttons (appear only while scrolling)
+- [x] Clipboard image paste support in message input
+- [x] Disabled pinch-zoom and text selection on non-input mobile UI elements
 
 ### Advanced Features
 
