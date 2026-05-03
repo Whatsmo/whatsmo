@@ -414,11 +414,30 @@ pub async fn request_pair_code(
     })
 }
 
+/// Wraps a `wa::Message` in an ephemeral `FutureProofMessage` if a duration is provided.
+/// When `duration` is `None` or `Some(0)`, returns the original message unchanged.
+fn wrap_ephemeral(message: wa::Message, duration: Option<u32>) -> wa::Message {
+    match duration {
+        Some(seconds) if seconds > 0 => wa::Message {
+            ephemeral_message: Some(Box::new(wa::message::FutureProofMessage {
+                message: Some(Box::new(message)),
+            })),
+            message_context_info: Some(wa::MessageContextInfo {
+                message_add_on_duration_in_secs: Some(seconds),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        _ => message,
+    }
+}
+
 #[tauri::command]
 pub async fn send_text_message(
     state: State<'_, WhatsmoState>,
     chat_id: String,
     text: String,
+    ephemeral_duration: Option<u32>,
 ) -> CommandResult<OutgoingMessagePayload> {
     let trimmed = text.trim().to_string();
     if trimmed.is_empty() {
@@ -440,10 +459,11 @@ pub async fn send_text_message(
     let jid = chat_id
         .parse::<Jid>()
         .map_err(|error| format!("Invalid chat id: {error}"))?;
-    let message = wa::Message {
+    let inner_message = wa::Message {
         conversation: Some(trimmed.clone()),
         ..Default::default()
     };
+    let message = wrap_ephemeral(inner_message, ephemeral_duration);
 
     let message_id = client
         .send_message(jid, message)
@@ -470,6 +490,7 @@ pub async fn send_media_message(
     duration_seconds: Option<u32>,
     view_once: Option<bool>,
     ptt: Option<bool>,
+    ephemeral_duration: Option<u32>,
 ) -> CommandResult<OutgoingMediaPayload> {
     const MAX_MEDIA_BYTES: usize = 64 * 1024 * 1024;
 
@@ -512,7 +533,7 @@ pub async fn send_media_message(
         mime_type.trim().to_string()
     };
 
-    let message = match kind.as_str() {
+    let inner_message = match kind.as_str() {
         "image" => wa::Message {
             image_message: Some(Box::new(wa::message::ImageMessage {
                 url: Some(upload.url),
@@ -591,6 +612,8 @@ pub async fn send_media_message(
         },
         _ => unreachable!(),
     };
+
+    let message = wrap_ephemeral(inner_message, ephemeral_duration);
 
     let message_id = client
         .send_message(jid, message)

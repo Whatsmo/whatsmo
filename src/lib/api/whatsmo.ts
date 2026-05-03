@@ -118,7 +118,7 @@ export async function resumeSavedSession(): Promise<SessionStatusPayload> {
   return invoke<SessionStatusPayload>('resume_saved_session');
 }
 
-export async function sendTextMessage(chatId: string, text: string): Promise<OutgoingMessagePayload> {
+export async function sendTextMessage(chatId: string, text: string, ephemeralDuration?: number): Promise<OutgoingMessagePayload> {
   if (!isTauriRuntime()) {
     return {
       id: crypto.randomUUID(),
@@ -128,7 +128,7 @@ export async function sendTextMessage(chatId: string, text: string): Promise<Out
     };
   }
 
-  return invoke<OutgoingMessagePayload>('send_text_message', { chatId, text });
+  return invoke<OutgoingMessagePayload>('send_text_message', { chatId, text, ephemeralDuration });
 }
 
 export async function sendMediaMessage(
@@ -140,7 +140,8 @@ export async function sendMediaMessage(
   caption?: string,
   durationSeconds?: number,
   viewOnce?: boolean,
-  ptt?: boolean
+  ptt?: boolean,
+  ephemeralDuration?: number
 ): Promise<OutgoingMediaPayload> {
   if (!isTauriRuntime()) {
     return {
@@ -162,7 +163,8 @@ export async function sendMediaMessage(
     caption,
     durationSeconds,
     viewOnce,
-    ptt
+    ptt,
+    ephemeralDuration
   });
 }
 

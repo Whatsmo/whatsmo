@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ChatMessage, ChatSummary, ContactProfile, GroupMetadataPayload } from '$lib/api/types';
+  import { appState, setChatEphemeralDefault } from '$lib/stores/app';
   import ChatComposer from './ChatComposer.svelte';
   import Icon from './Icon.svelte';
   import MessageBubble from './MessageBubble.svelte';
@@ -21,6 +22,42 @@
   let selectedMediaMessage: ChatMessage | null = null;
   let imageZoom = 1;
   let infoOpen = false;
+  let timerOpen = false;
+  let customTimerInput = '';
+
+  const TIMER_PRESETS = [
+    { label: 'Off', seconds: 0 },
+    { label: '1 hour', seconds: 3600 },
+    { label: '24 hours', seconds: 86400 },
+    { label: '7 days', seconds: 604800 },
+    { label: '90 days', seconds: 7776000 }
+  ];
+
+  $: activeTimer = $appState.chatEphemeralDefaults[chat.id] ?? 0;
+  $: activeTimerLabel = activeTimer > 0
+    ? TIMER_PRESETS.find((p) => p.seconds === activeTimer)?.label ?? formatDuration(activeTimer)
+    : '';
+
+  function formatDuration(seconds: number): string {
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
+    return `${Math.floor(seconds / 86400)}d`;
+  }
+
+  function setTimer(seconds: number): void {
+    setChatEphemeralDefault(chat.id, seconds);
+    timerOpen = false;
+  }
+
+  function setCustomTimer(): void {
+    const value = parseInt(customTimerInput, 10);
+    if (!isNaN(value) && value > 0) {
+      setChatEphemeralDefault(chat.id, value);
+      customTimerInput = '';
+      timerOpen = false;
+    }
+  }
 
   $: if (chat.id !== currentChatId) {
     currentChatId = chat.id;
@@ -110,7 +147,12 @@
       <h2>{chat.title}</h2>
       <p>{chat.typing ?? groupMetaLabel}</p>
     </div>
-    <button class="icon" aria-label="Video call"><Icon name="video" /></button>
+    <button class="icon" class:timer-active={activeTimer > 0} aria-label="Disappearing messages" on:click={() => (timerOpen = !timerOpen)}>
+      <Icon name="timer" />
+      {#if activeTimer > 0}
+        <span class="timer-badge">{activeTimerLabel}</span>
+      {/if}
+    </button>
     <button class="icon" aria-label="Chat info" on:click={() => (infoOpen = true)}><Icon name="more" /></button>
   </header>
 
@@ -133,6 +175,40 @@
   </div>
 
   <ChatComposer on:send={(event) => onSend(chat.id, event.detail)} on:attach={(event) => onAttach(chat.id, event.detail)} />
+
+  {#if timerOpen}
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <div class="timer-overlay" on:click={() => (timerOpen = false)}>
+      <!-- svelte-ignore a11y-click-events-have-key-events -->
+      <!-- svelte-ignore a11y-no-static-element-interactions -->
+      <div class="timer-sheet" on:click|stopPropagation>
+        <div class="timer-handle"></div>
+        <h3>Disappearing messages</h3>
+        <p class="timer-hint">Messages will auto-delete after the selected duration.</p>
+        <div class="timer-grid">
+          {#each TIMER_PRESETS as preset}
+            <button
+              class="timer-preset"
+              class:active={activeTimer === preset.seconds}
+              on:click={() => setTimer(preset.seconds)}
+            >
+              {preset.label}
+            </button>
+          {/each}
+        </div>
+        <div class="timer-custom">
+          <input
+            type="number"
+            bind:value={customTimerInput}
+            placeholder="Custom (seconds)"
+            min="1"
+          />
+          <button class="timer-set-btn" on:click={setCustomTimer}>Set</button>
+        </div>
+      </div>
+    </div>
+  {/if}
 
   {#if infoOpen}
     <aside class="chat-info" aria-label="Chat info">
@@ -717,5 +793,137 @@
     width: 42px;
     height: 42px;
     font-size: 1.4rem;
+  }
+
+  /* ─── Timer Picker ─── */
+  .timer-active {
+    color: var(--wa-green-dark) !important;
+    position: relative;
+  }
+
+  .timer-badge {
+    position: absolute;
+    bottom: 2px;
+    right: -2px;
+    font-size: 0.55rem;
+    font-weight: 800;
+    background: var(--wa-green-dark);
+    color: white;
+    padding: 1px 4px;
+    border-radius: 6px;
+    line-height: 1.2;
+  }
+
+  .timer-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    animation: fadeIn 0.15s ease;
+  }
+
+  .timer-sheet {
+    width: 100%;
+    max-width: 440px;
+    padding: 16px 20px 24px;
+    background: var(--paper);
+    border-radius: 24px 24px 0 0;
+    animation: slideUp 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .timer-handle {
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border-color);
+    margin: 0 auto 16px;
+  }
+
+  .timer-sheet h3 {
+    margin: 0 0 4px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .timer-hint {
+    margin: 0 0 16px;
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+
+  .timer-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .timer-preset {
+    padding: 10px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .timer-preset:hover {
+    background: var(--nav-active);
+  }
+
+  .timer-preset.active {
+    background: var(--wa-green-dark);
+    color: white;
+    border-color: var(--wa-green-dark);
+  }
+
+  .timer-custom {
+    display: flex;
+    gap: 8px;
+  }
+
+  .timer-custom input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    font: inherit;
+    font-size: 0.9rem;
+    color: var(--ink);
+    background: transparent;
+    outline: none;
+  }
+
+  .timer-custom input:focus {
+    border-color: var(--wa-green-dark);
+  }
+
+  .timer-set-btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 12px;
+    background: var(--wa-green-dark);
+    color: white;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 </style>

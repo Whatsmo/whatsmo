@@ -193,6 +193,8 @@ interface PersistedAppData {
   groups: Record<string, GroupMetadataPayload>;
   selectedChatId: string;
   theme?: import('$lib/api/types').ThemeMode;
+  chatEphemeralDefaults?: Record<string, number>;
+  powerFeatures?: import('$lib/api/types').PowerFeatures;
 }
 
 export const appState = writable<AppModel>(createInitialState());
@@ -206,7 +208,9 @@ if (typeof window !== 'undefined') {
       contacts: state.contacts,
       groups: state.groups,
       selectedChatId: state.selectedChatId,
-      theme: state.theme
+      theme: state.theme,
+      chatEphemeralDefaults: state.chatEphemeralDefaults,
+      powerFeatures: state.powerFeatures
     };
 
     try {
@@ -499,11 +503,13 @@ export function handleContactNumberChanged(payload: ContactNumberChangedPayload)
   void syncKnownContactProfiles([newId, payload.newLid].filter(Boolean) as string[]);
 }
 
-export async function sendMessage(chatId: string, text: string): Promise<void> {
+export async function sendMessage(chatId: string, text: string, ephemeralOverride?: number): Promise<void> {
   const trimmed = text.trim();
   if (!trimmed) {
     return;
   }
+
+  const duration = ephemeralOverride ?? get(appState).chatEphemeralDefaults[chatId] ?? undefined;
 
   const optimistic: ChatMessage = {
     id: crypto.randomUUID(),
@@ -519,7 +525,7 @@ export async function sendMessage(chatId: string, text: string): Promise<void> {
   appendMessage(optimistic);
 
   try {
-    const sent = await sendTextMessage(chatId, trimmed);
+    const sent = await sendTextMessage(chatId, trimmed, duration);
     markMessageStatus(chatId, optimistic.id, 'sent', sent.id);
   } catch (error) {
     markMessageStatus(chatId, optimistic.id, 'failed');
@@ -532,6 +538,7 @@ export interface SendAttachmentOptions {
   viewOnce?: boolean;
   ptt?: boolean;
   forcedKind?: MediaKind;
+  ephemeralDuration?: number;
 }
 
 export async function sendAttachment(chatId: string, file: File, options: SendAttachmentOptions | string = ''): Promise<void> {
@@ -581,6 +588,7 @@ export async function sendAttachment(chatId: string, file: File, options: SendAt
   appendMessage(optimistic);
 
   try {
+    const duration = attachmentOptions.ephemeralDuration ?? get(appState).chatEphemeralDefaults[chatId] ?? undefined;
     const sent = await sendMediaMessage(
       chatId,
       kind,
@@ -590,7 +598,8 @@ export async function sendAttachment(chatId: string, file: File, options: SendAt
       trimmedCaption || undefined,
       undefined,
       attachmentOptions.viewOnce,
-      attachmentOptions.ptt
+      attachmentOptions.ptt,
+      duration
     );
     markMessageStatus(chatId, optimistic.id, 'sent', sent.id);
   } catch (error) {
@@ -735,16 +744,26 @@ function applyMessageEdit(payload: IncomingMessagePayload): void {
   const targetMessageId = payload.targetMessageId;
   if (!targetMessageId) return;
 
+  const currentState = get(appState);
+  const antiEdit = currentState.powerFeatures.antiEdit;
+
   appState.update((state) => {
     const existingMessages = state.messages[payload.chatId] ?? [];
     let changed = false;
     const messages = existingMessages.map((message) => {
       if (message.id !== targetMessageId) return message;
       changed = true;
+
+      const editHistory = [...(message.editHistory ?? [])];
+      if (antiEdit && message.text) {
+        editHistory.push(message.text);
+      }
+
       return {
         ...message,
         text: payload.text ?? message.text,
         edited: true,
+        editHistory: editHistory.length > 0 ? editHistory : undefined,
         timestamp: Math.max(message.timestamp, payload.timestampMs)
       };
     });
@@ -757,12 +776,25 @@ function applyMessageEdit(payload: IncomingMessagePayload): void {
 
 function applyMessageRevoke(payload: IncomingMessagePayload): void {
   const targetMessageId = payload.targetMessageId ?? payload.id;
+  const currentState = get(appState);
+  const { antiDelete, autoForwardDeleted, forwardTargetId } = currentState.powerFeatures;
+
   appState.update((state) => {
     const existingMessages = state.messages[payload.chatId] ?? [];
     let changed = false;
     const messages = existingMessages.map((message) => {
       if (message.id !== targetMessageId) return message;
       changed = true;
+
+      if (antiDelete) {
+        // Anti-Delete: keep the content, just mark it
+        return {
+          ...message,
+          deletedBySender: true
+        };
+      }
+
+      // Normal behavior: wipe content
       return {
         ...message,
         text: payload.eventKind === 'admin-revoke' ? 'This message was deleted by an admin.' : 'This message was deleted.',
@@ -772,6 +804,21 @@ function applyMessageRevoke(payload: IncomingMessagePayload): void {
     });
 
     if (!changed) return state;
+
+    // Auto-forward: send the deleted message content to the log chat
+    if (antiDelete && autoForwardDeleted && forwardTargetId) {
+      const originalMsg = existingMessages.find((m) => m.id === targetMessageId);
+      if (originalMsg && !originalMsg.fromMe) {
+        const chat = state.chats.find((c) => c.id === payload.chatId);
+        const senderLabel = originalMsg.senderName ?? originalMsg.senderId;
+        const chatLabel = chat?.title ?? payload.chatId;
+        const logText = `🗑 Deleted message from ${senderLabel} in ${chatLabel}:\n${originalMsg.text ?? '[media]'}`;
+        // Fire and forget — don't block the store update
+        void sendTextMessage(forwardTargetId, logText).catch(() => {
+          // Silently ignore forward failures
+        });
+      }
+    }
 
     return updateChatAfterMessageMutation(state, payload.chatId, messages);
   });
@@ -1185,6 +1232,13 @@ function bytesToDataUrl(bytes: number[], mimeType: string): string {
 }
 
 function createInitialState(): AppModel {
+  const defaultPowerFeatures: import('$lib/api/types').PowerFeatures = {
+    antiDelete: false,
+    antiEdit: false,
+    autoForwardDeleted: false,
+    forwardTargetId: ''
+  };
+
   const persisted = loadPersistedState();
   if (persisted) {
     return {
@@ -1201,7 +1255,9 @@ function createInitialState(): AppModel {
       groups: persisted.groups,
       selectedChatId: persisted.selectedChatId,
       notificationEnabled: false,
-      theme: persisted.theme ?? 'system'
+      theme: persisted.theme ?? 'system',
+      chatEphemeralDefaults: persisted.chatEphemeralDefaults ?? {},
+      powerFeatures: persisted.powerFeatures ?? defaultPowerFeatures
     };
   }
 
@@ -1221,12 +1277,37 @@ function createInitialState(): AppModel {
     groups: {},
     selectedChatId: shouldSeedPreview ? chats[0]?.id ?? '' : '',
     notificationEnabled: false,
-    theme: 'system'
+    theme: 'system',
+    chatEphemeralDefaults: {},
+    powerFeatures: defaultPowerFeatures
   };
 }
 
 export function setTheme(theme: import('$lib/api/types').ThemeMode): void {
   appState.update((state) => ({ ...state, theme }));
+}
+
+export function setChatEphemeralDefault(chatId: string, durationSeconds: number): void {
+  appState.update((state) => {
+    const defaults = { ...state.chatEphemeralDefaults };
+    if (durationSeconds <= 0) {
+      delete defaults[chatId];
+    } else {
+      defaults[chatId] = durationSeconds;
+    }
+    return { ...state, chatEphemeralDefaults: defaults };
+  });
+}
+
+export function getChatEphemeralDefault(chatId: string): number {
+  return get(appState).chatEphemeralDefaults[chatId] ?? 0;
+}
+
+export function updatePowerFeatures(updates: Partial<import('$lib/api/types').PowerFeatures>): void {
+  appState.update((state) => ({
+    ...state,
+    powerFeatures: { ...state.powerFeatures, ...updates }
+  }));
 }
 
 function loadPersistedState(): PersistedAppData | null {

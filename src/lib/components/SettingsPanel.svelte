@@ -1,10 +1,7 @@
 <script lang="ts">
-  import { appState, setTheme, refreshAccountDevice, setAuth, setConnection } from '$lib/stores/app';
-  import { disconnectSession, logoutSession } from '$lib/api/whatsmo';
+  import { appState, setTheme, updatePowerFeatures } from '$lib/stores/app';
   import type { ThemeMode } from '$lib/api/types';
   import Icon from './Icon.svelte';
-
-  let busy = false;
 
   const modes: { value: ThemeMode; label: string; icon: string }[] = [
     { value: 'light', label: 'Light', icon: 'light_mode' },
@@ -12,14 +9,28 @@
     { value: 'system', label: 'System default', icon: 'desktop_windows' }
   ];
 
+  function toggleAntiDelete(): void {
+    updatePowerFeatures({ antiDelete: !$appState.powerFeatures.antiDelete });
+  }
+
+  function toggleAntiEdit(): void {
+    updatePowerFeatures({ antiEdit: !$appState.powerFeatures.antiEdit });
+  }
+
+  function toggleAutoForward(): void {
+    updatePowerFeatures({ autoForwardDeleted: !$appState.powerFeatures.autoForwardDeleted });
+  }
+
+  function updateForwardTarget(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    updatePowerFeatures({ forwardTargetId: input.value.trim() });
+  }
 </script>
 
 <div class="settings-panel">
   <header class="settings-header">
     <h2>Settings</h2>
   </header>
-
-
 
   <section class="setting-group">
     <h3>Theme</h3>
@@ -45,6 +56,78 @@
         </label>
       {/each}
     </div>
+  </section>
+
+  <section class="setting-group">
+    <h3>
+      <Icon name="bolt" size="16px" />
+      Power Features
+    </h3>
+    <p class="section-desc">Advanced features not available in official WhatsApp.</p>
+
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <span class="toggle-label">Anti-Delete</span>
+        <span class="toggle-desc">Keep messages visible even after sender deletes them</span>
+      </div>
+      <button
+        class="toggle-switch"
+        class:active={$appState.powerFeatures.antiDelete}
+        on:click={toggleAntiDelete}
+        aria-label="Toggle Anti-Delete"
+      >
+        <span class="toggle-thumb"></span>
+      </button>
+    </div>
+
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <span class="toggle-label">Anti-Edit</span>
+        <span class="toggle-desc">Preserve original text when messages are edited</span>
+      </div>
+      <button
+        class="toggle-switch"
+        class:active={$appState.powerFeatures.antiEdit}
+        on:click={toggleAntiEdit}
+        aria-label="Toggle Anti-Edit"
+      >
+        <span class="toggle-thumb"></span>
+      </button>
+    </div>
+
+    {#if $appState.powerFeatures.antiDelete}
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <span class="toggle-label">Auto-Forward Deleted</span>
+          <span class="toggle-desc">Forward deleted messages to a specific chat</span>
+        </div>
+        <button
+          class="toggle-switch"
+          class:active={$appState.powerFeatures.autoForwardDeleted}
+          on:click={toggleAutoForward}
+          aria-label="Toggle Auto-Forward"
+        >
+          <span class="toggle-thumb"></span>
+        </button>
+      </div>
+
+      {#if $appState.powerFeatures.autoForwardDeleted}
+        <div class="forward-target">
+          <label class="target-label">
+            <Icon name="forward_to_inbox" size="18px" />
+            <span>Forward to Chat ID</span>
+          </label>
+          <input
+            type="text"
+            class="target-input"
+            placeholder="e.g. 6281234567890@s.whatsapp.net"
+            value={$appState.powerFeatures.forwardTargetId}
+            on:input={updateForwardTarget}
+          />
+          <span class="target-hint">Use a JID from your chat list or create a group for logging.</span>
+        </div>
+      {/if}
+    {/if}
   </section>
 
   <section class="setting-group about-section">
@@ -95,9 +178,17 @@
     color: var(--wa-green-dark, #008069);
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
 
-
+  .section-desc {
+    margin: -8px 0 16px;
+    font-size: 0.85rem;
+    color: var(--muted);
+    line-height: 1.4;
+  }
 
   /* Theme Options */
   .theme-options {
@@ -193,6 +284,111 @@
     border-radius: 50%;
     background: var(--wa-green-dark);
     transition: transform 0.2s ease;
+  }
+
+  /* ─── Power Features ─── */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .toggle-row:last-child {
+    border-bottom: none;
+  }
+
+  .toggle-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    margin-right: 16px;
+  }
+
+  .toggle-label {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .toggle-desc {
+    font-size: 0.82rem;
+    color: var(--muted);
+    line-height: 1.3;
+  }
+
+  .toggle-switch {
+    position: relative;
+    width: 52px;
+    height: 30px;
+    border-radius: 15px;
+    border: none;
+    background: var(--border-color, #ccc);
+    cursor: pointer;
+    transition: background 0.25s ease;
+    flex-shrink: 0;
+    padding: 0;
+  }
+
+  .toggle-switch.active {
+    background: var(--wa-green, #25d366);
+  }
+
+  .toggle-thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .toggle-switch.active .toggle-thumb {
+    transform: translateX(22px);
+  }
+
+  .forward-target {
+    padding: 12px 0 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .target-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .target-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    font: inherit;
+    font-size: 0.9rem;
+    color: var(--ink);
+    background: transparent;
+    outline: none;
+    transition: border-color 0.2s ease;
+  }
+
+  .target-input:focus {
+    border-color: var(--wa-green, #008069);
+  }
+
+  .target-hint {
+    font-size: 0.78rem;
+    color: var(--muted);
+    line-height: 1.3;
   }
 
   /* About Section */

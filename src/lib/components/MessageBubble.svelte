@@ -32,8 +32,19 @@
   {#if showSenderName && message.senderName}
     <p class="sender-name">{message.senderName}</p>
   {/if}
-  {#if message.deleted}
+  {#if message.deleted && !message.deletedBySender}
     <p class="deleted">{message.text ?? 'This message was deleted.'}</p>
+  {:else if message.deletedBySender}
+    <div class="anti-delete-badge">
+      <Icon name="delete" size="14px" />
+      <span>Deleted by sender</span>
+    </div>
+    {#if message.media}
+      <!-- show the preserved media -->
+    {/if}
+    {#if message.text}
+      <p>{message.text}</p>
+    {/if}
   {:else if message.media}
     <button
       class:has-preview={Boolean(mediaSource)}
@@ -88,10 +99,23 @@
   {#if message.text && !message.deleted}
     <p>{message.text}</p>
   {/if}
+  {#if message.editHistory && message.editHistory.length > 0}
+    <details class="edit-history">
+      <summary><Icon name="history" size="14px" /> {message.editHistory.length} earlier version{message.editHistory.length > 1 ? 's' : ''}</summary>
+      <ul>
+        {#each message.editHistory as oldText, i}
+          <li><span class="edit-index">v{i + 1}</span> {oldText}</li>
+        {/each}
+      </ul>
+    </details>
+  {/if}
   <footer>
     <time>{formatter.format(message.timestamp)}</time>
     {#if message.edited && !message.deleted}
       <em>edited</em>
+    {/if}
+    {#if message.deletedBySender}
+      <em class="power-tag">kept</em>
     {/if}
     {#if message.fromMe}
       <span class="status-tick" class:read={message.status === 'read'}>
@@ -216,6 +240,59 @@
   .deleted {
     color: var(--muted);
     font-style: italic;
+  }
+
+  .anti-delete-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 8px;
+    background: rgba(234, 67, 53, 0.1);
+    color: #ea4335;
+    font-size: 0.72rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .power-tag {
+    font-style: normal;
+    color: var(--wa-green-dark);
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+
+  .edit-history {
+    margin-top: 4px;
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+
+  .edit-history summary {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 500;
+    color: var(--wa-green-dark);
+  }
+
+  .edit-history ul {
+    margin: 4px 0 0;
+    padding: 0 0 0 16px;
+    list-style: none;
+  }
+
+  .edit-history li {
+    padding: 2px 0;
+    border-bottom: 1px dashed var(--border-color);
+    color: var(--ink);
+  }
+
+  .edit-index {
+    color: var(--muted);
+    font-weight: 600;
+    margin-right: 4px;
   }
 
   .sender-name {

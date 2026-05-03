@@ -80,6 +80,10 @@ export interface ChatMessage {
   deleted?: boolean;
   edited?: boolean;
   media?: MediaAttachment;
+  /** Power Feature: original content preserved when sender deleted */
+  deletedBySender?: boolean;
+  /** Power Feature: history of original texts before edits */
+  editHistory?: string[];
 }
 
 export interface ChatSummary {
@@ -248,6 +252,13 @@ export interface ReceiptPayload {
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 
+export interface PowerFeatures {
+  antiDelete: boolean;
+  antiEdit: boolean;
+  autoForwardDeleted: boolean;
+  forwardTargetId: string;
+}
+
 export interface AppModel {
   auth: AuthPayload;
   account: AccountDevicePayload | null;
@@ -260,4 +271,6 @@ export interface AppModel {
   selectedChatId: string;
   notificationEnabled: boolean;
   theme: ThemeMode;
+  chatEphemeralDefaults: Record<string, number>;
+  powerFeatures: PowerFeatures;
 }
