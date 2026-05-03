@@ -438,31 +438,38 @@ pub async fn send_text_message(
     chat_id: String,
     text: String,
     ephemeral_duration: Option<u32>,
+    quoted_message_id: Option<String>,
 ) -> CommandResult<OutgoingMessagePayload> {
     let trimmed = text.trim().to_string();
     if trimmed.is_empty() {
         return Err("Message cannot be empty.".to_string());
     }
 
-    let client = {
-        let guard = state.inner.lock().await;
-        if !guard.connected {
-            return Err("WhatsApp session is not connected yet.".to_string());
-        }
-
-        guard
-            .client
-            .clone()
-            .ok_or_else(|| "WhatsApp session is not connected yet.".to_string())?
-    };
-
+    let client = connected_client(&state).await?;
     let jid = chat_id
         .parse::<Jid>()
         .map_err(|error| format!("Invalid chat id: {error}"))?;
-    let inner_message = wa::Message {
-        conversation: Some(trimmed.clone()),
-        ..Default::default()
+
+    let inner_message = if let Some(qid) = quoted_message_id {
+        wa::Message {
+            extended_text_message: Some(Box::new(wa::message::ExtendedTextMessage {
+                text: Some(trimmed.clone()),
+                context_info: Some(Box::new(wa::ContextInfo {
+                    stanza_id: Some(qid),
+                    participant: Some(chat_id.clone()),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        }
+    } else {
+        wa::Message {
+            conversation: Some(trimmed.clone()),
+            ..Default::default()
+        }
     };
+
     let message = wrap_ephemeral(inner_message, ephemeral_duration);
 
     let message_id = client
@@ -476,6 +483,126 @@ pub async fn send_text_message(
         text: trimmed,
         timestamp_ms: Utc::now().timestamp_millis(),
     })
+}
+
+#[tauri::command]
+pub async fn revoke_message(
+    state: State<'_, WhatsmoState>,
+    chat_id: String,
+    message_id: String,
+) -> CommandResult<()> {
+    let client = connected_client(&state).await?;
+    let jid = chat_id
+        .parse::<Jid>()
+        .map_err(|error| format!("Invalid chat id: {error}"))?;
+    client
+        .revoke_message(jid, &message_id, whatsapp_rust::RevokeType::Sender)
+        .await
+        .map_err(|error| format!("Failed to revoke message: {error}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn edit_message(
+    state: State<'_, WhatsmoState>,
+    chat_id: String,
+    message_id: String,
+    new_text: String,
+) -> CommandResult<()> {
+    let trimmed = new_text.trim().to_string();
+    if trimmed.is_empty() {
+        return Err("Edited text cannot be empty.".to_string());
+    }
+    let client = connected_client(&state).await?;
+    let jid = chat_id
+        .parse::<Jid>()
+        .map_err(|error| format!("Invalid chat id: {error}"))?;
+    let new_content = wa::Message {
+        conversation: Some(trimmed),
+        ..Default::default()
+    };
+    client
+        .edit_message(jid, &message_id, new_content)
+        .await
+        .map_err(|error| format!("Failed to edit message: {error}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn send_reaction(
+    state: State<'_, WhatsmoState>,
+    chat_id: String,
+    message_id: String,
+    sender_id: String,
+    emoji: String,
+) -> CommandResult<()> {
+    let client = connected_client(&state).await?;
+    let jid = chat_id
+        .parse::<Jid>()
+        .map_err(|error| format!("Invalid chat id: {error}"))?;
+    let _sender_jid = sender_id
+        .parse::<Jid>()
+        .map_err(|error| format!("Invalid sender id: {error}"))?;
+    let key = wa::MessageKey {
+        remote_jid: Some(chat_id.clone()),
+        from_me: Some(false),
+        id: Some(message_id),
+        participant: Some(sender_id),
+        ..Default::default()
+    };
+    let reaction = wa::Message {
+        reaction_message: Some(wa::message::ReactionMessage {
+            key: Some(key),
+            text: Some(emoji),
+            sender_timestamp_ms: Some(Utc::now().timestamp_millis()),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    client
+        .send_message(jid, reaction)
+        .await
+        .map_err(|error| format!("Failed to send reaction: {error}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn send_chat_presence(
+    state: State<'_, WhatsmoState>,
+    chat_id: String,
+    composing: bool,
+) -> CommandResult<()> {
+    let client = connected_client(&state).await?;
+    let jid = chat_id
+        .parse::<Jid>()
+        .map_err(|error| format!("Invalid chat id: {error}"))?;
+    if composing {
+        client
+            .chatstate()
+            .send_composing(&jid)
+            .await
+            .map_err(|error| format!("Failed to send composing: {error}"))?;
+    } else {
+        client
+            .chatstate()
+            .send_paused(&jid)
+            .await
+            .map_err(|error| format!("Failed to send paused: {error}"))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn mark_chat_read(state: State<'_, WhatsmoState>, chat_id: String) -> CommandResult<()> {
+    let client = connected_client(&state).await?;
+    let jid = chat_id
+        .parse::<Jid>()
+        .map_err(|error| format!("Invalid chat id: {error}"))?;
+    client
+        .mark_as_read(&jid, None, vec![])
+        .await
+        .map_err(|error| format!("Failed to mark chat read: {error}"))?;
+    Ok(())
 }
 
 #[tauri::command]
