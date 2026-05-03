@@ -4,6 +4,7 @@
 
   export let message: ChatMessage;
   export let showSenderName = false;
+  export let isGroupContinuation = false;
   export let senderAvatarUrl: string | undefined = undefined;
   export let senderAvatarGradient: string | undefined = undefined;
   export let onRetry: (message: ChatMessage) => void = () => undefined;
@@ -86,9 +87,9 @@
   }
 </script>
 
-<div class:bubble-row={showSenderName && !message.fromMe}>
-  {#if showSenderName && !message.fromMe}
-    <div class="sender-avatar" style={`background: ${senderAvatarGradient ?? 'var(--wa-green)'}`}>
+<div class:bubble-row={showSenderName && !message.fromMe && senderAvatarGradient} class:group-continuation={isGroupContinuation}>
+  {#if showSenderName && !message.fromMe && senderAvatarGradient}
+    <div class="sender-avatar" style={`background: ${senderAvatarGradient}`}>
       {#if senderAvatarUrl}
         <img src={senderAvatarUrl} alt="" referrerpolicy="no-referrer" />
       {:else}
@@ -394,6 +395,10 @@
     color: var(--muted);
     font-weight: 600;
     margin-right: 4px;
+  }
+
+  .group-continuation {
+    padding-left: 36px;
   }
 
   .bubble-row {

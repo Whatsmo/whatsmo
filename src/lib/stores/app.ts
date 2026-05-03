@@ -193,6 +193,7 @@ interface PersistedAppData {
   contacts: ContactProfile[];
   groups: Record<string, GroupMetadataPayload>;
   selectedChatId: string;
+  showGroupAvatars?: boolean;
   theme?: import('$lib/api/types').ThemeMode;
   chatEphemeralDefaults?: Record<string, number>;
   powerFeatures?: import('$lib/api/types').PowerFeatures;
@@ -209,6 +210,7 @@ if (typeof window !== 'undefined') {
       contacts: state.contacts,
       groups: state.groups,
       selectedChatId: state.selectedChatId,
+      showGroupAvatars: state.showGroupAvatars,
       theme: state.theme,
       chatEphemeralDefaults: state.chatEphemeralDefaults,
       powerFeatures: state.powerFeatures
@@ -1304,6 +1306,7 @@ function createInitialState(): AppModel {
       groups: persisted.groups,
       selectedChatId: persisted.selectedChatId,
       notificationEnabled: false,
+      showGroupAvatars: persisted.showGroupAvatars ?? true,
       theme: persisted.theme ?? 'system',
       chatEphemeralDefaults: persisted.chatEphemeralDefaults ?? {},
       powerFeatures: persisted.powerFeatures ?? defaultPowerFeatures
@@ -1326,10 +1329,15 @@ function createInitialState(): AppModel {
     groups: {},
     selectedChatId: shouldSeedPreview ? chats[0]?.id ?? '' : '',
     notificationEnabled: false,
+    showGroupAvatars: true,
     theme: 'system',
     chatEphemeralDefaults: {},
     powerFeatures: defaultPowerFeatures
   };
+}
+
+export function setShowGroupAvatars(show: boolean): void {
+  appState.update((state) => ({ ...state, showGroupAvatars: show }));
 }
 
 export function setTheme(theme: import('$lib/api/types').ThemeMode): void {

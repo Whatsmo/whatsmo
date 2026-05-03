@@ -191,6 +191,7 @@
         contact={$appState.contacts.find((c) => c.id === $selectedChat.id || c.lid === $selectedChat.id) ?? null}
         contacts={$appState.contacts}
         group={$appState.groups[$selectedChat.id] ?? null}
+        showGroupAvatars={$appState.showGroupAvatars}
         messages={$selectedMessages}
         onBack={() => setScreen('chats')}
         onSend={(chatId, text, quoted) => sendMessage(chatId, text, { quotedMessage: quoted })}

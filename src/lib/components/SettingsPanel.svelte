@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { appState, setTheme, updatePowerFeatures } from '$lib/stores/app';
+  import { appState, setShowGroupAvatars, setTheme, updatePowerFeatures } from '$lib/stores/app';
   import type { ThemeMode } from '$lib/api/types';
   import Icon from './Icon.svelte';
 
@@ -55,6 +55,20 @@
           <div class="radio-indicator"></div>
         </label>
       {/each}
+    </div>
+  </section>
+
+  <section class="setting-group">
+    <h3>Chat</h3>
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <span class="toggle-label">Show group avatars</span>
+        <span class="toggle-desc">Display sender avatars next to messages in group chats</span>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" checked={$appState.showGroupAvatars} on:change={() => setShowGroupAvatars(!$appState.showGroupAvatars)} />
+        <span class="toggle-track"></span>
+      </label>
     </div>
   </section>
 

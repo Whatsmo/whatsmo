@@ -12,6 +12,7 @@
   export let contact: ContactProfile | null = null;
   export let contacts: ContactProfile[] = [];
   export let group: GroupMetadataPayload | null = null;
+  export let showGroupAvatars = true;
   export let onBack: () => void = () => undefined;
   export let onSend: (chatId: string, text: string, quotedMessage?: ChatMessage) => void;
   export let onRetry: (chatId: string, messageId: string) => void = () => undefined;
@@ -99,7 +100,7 @@
     scrollHideTimer = window.setTimeout(() => {
       showScrollTop = false;
       showScrollBottom = false;
-    }, 2500);
+    }, 1500);
   }
 
   $: hiddenMessageCount = Math.max(messages.length - visibleMessageCount, 0);
@@ -273,13 +274,15 @@
     {#each visibleMessages as message, i (message.id)}
       {@const prevMessage = visibleMessages[i - 1]}
       {@const isNewSender = !prevMessage || prevMessage.senderId !== message.senderId || prevMessage.fromMe !== message.fromMe}
-      {@const senderContact = chat.kind === 'group' && !message.fromMe ? contacts.find((c) => c.id === message.senderId || c.lid === message.senderId) : null}
+      {@const isGroupOther = chat.kind === 'group' && !message.fromMe}
+      {@const senderContact = isGroupOther ? contacts.find((c) => c.id === message.senderId || c.lid === message.senderId) : null}
       <div class:sender-gap={isNewSender && i > 0} class="msg-wrap">
         <MessageBubble
           {message}
-          showSenderName={chat.kind === 'group' && !message.fromMe && isNewSender}
-          senderAvatarUrl={senderContact?.avatarUrl}
-          senderAvatarGradient={senderContact?.avatarGradient}
+          showSenderName={isGroupOther && isNewSender}
+          isGroupContinuation={isGroupOther && !isNewSender && showGroupAvatars}
+          senderAvatarUrl={showGroupAvatars ? senderContact?.avatarUrl : undefined}
+          senderAvatarGradient={showGroupAvatars ? senderContact?.avatarGradient : undefined}
           onRetry={() => onRetry(chat.id, message.id)}
           onDownloadMedia={() => onDownloadMedia(chat.id, message.id)}
           onOpenMedia={openMedia}

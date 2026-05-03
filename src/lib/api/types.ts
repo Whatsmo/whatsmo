@@ -282,6 +282,7 @@ export interface AppModel {
   groups: Record<string, GroupMetadataPayload>;
   selectedChatId: string;
   notificationEnabled: boolean;
+  showGroupAvatars: boolean;
   theme: ThemeMode;
   chatEphemeralDefaults: Record<string, number>;
   powerFeatures: PowerFeatures;
