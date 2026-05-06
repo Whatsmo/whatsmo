@@ -62,8 +62,8 @@ const contacts: ContactProfile[] = [
   },
   {
     id: 'team-design@g.us',
-    name: 'Whatsmo Test Group',
-    phone: '8 participants',
+    name: 'Whatsmo Dev Team',
+    phone: '6 participants',
     about: 'Android test devices and login flow.',
     avatarGradient: 'linear-gradient(135deg, #0abde3, #006266)'
   },
@@ -74,6 +74,28 @@ const contacts: ContactProfile[] = [
     about: 'Business account',
     avatarGradient: 'linear-gradient(135deg, #feca57, #ff6b6b)',
     isBusiness: true
+  },
+  {
+    id: '6281300056789@s.whatsapp.net',
+    name: 'Dimas',
+    phone: '+62 813-0005-6789',
+    about: 'Busy',
+    avatarGradient: 'linear-gradient(135deg, #a29bfe, #6c5ce7)'
+  },
+  {
+    id: '6289900011223@s.whatsapp.net',
+    name: 'Sari',
+    phone: '+62 899-0001-1223',
+    about: 'At work',
+    avatarGradient: 'linear-gradient(135deg, #fd79a8, #e84393)',
+    isOnline: true
+  },
+  {
+    id: 'family-group@g.us',
+    name: 'Family 🏠',
+    phone: '12 participants',
+    about: '',
+    avatarGradient: 'linear-gradient(135deg, #55a3f5, #2d6cdf)'
   }
 ];
 
@@ -95,28 +117,101 @@ const chats: ChatSummary[] = [
     id: contacts[1].id,
     kind: 'group',
     title: contacts[1].name,
-    subtitle: 'Faris: Pair code worked on my test number.',
-    unreadCount: 5,
+    subtitle: 'Dimas: Check the new build 🔥',
+    unreadCount: 8,
+    muted: false,
+    pinned: true,
+    archived: false,
+    avatarGradient: contacts[1].avatarGradient,
+    lastMessageAt: now - 1000 * 60 * 7,
+    participantCount: 6
+  },
+  {
+    id: contacts[4].id,
+    kind: 'direct',
+    title: contacts[4].name,
+    subtitle: '🎵 Voice message (0:23)',
+    unreadCount: 1,
     muted: false,
     pinned: false,
     archived: false,
-    avatarGradient: contacts[1].avatarGradient,
-    lastMessageAt: now - 1000 * 60 * 24,
-    participantCount: 8
+    avatarGradient: contacts[4].avatarGradient,
+    lastMessageAt: now - 1000 * 60 * 15
   },
   {
     id: contacts[2].id,
     kind: 'direct',
     title: contacts[2].name,
-    subtitle: 'Image received',
+    subtitle: '📄 proposal-v2.pdf',
     unreadCount: 0,
     muted: true,
     pinned: false,
     archived: false,
     avatarGradient: contacts[2].avatarGradient,
     lastMessageAt: now - 1000 * 60 * 80
+  },
+  {
+    id: contacts[3].id,
+    kind: 'direct',
+    title: contacts[3].name,
+    subtitle: 'You: Sounds good, let me know 👍',
+    unreadCount: 0,
+    muted: false,
+    pinned: false,
+    archived: false,
+    avatarGradient: contacts[3].avatarGradient,
+    lastMessageAt: now - 1000 * 60 * 120
+  },
+  {
+    id: contacts[5].id,
+    kind: 'group',
+    title: contacts[5].name,
+    subtitle: 'Mom: Don\'t forget dinner tonight',
+    unreadCount: 3,
+    muted: false,
+    pinned: false,
+    archived: false,
+    avatarGradient: contacts[5].avatarGradient,
+    lastMessageAt: now - 1000 * 60 * 45,
+    participantCount: 12
   }
 ];
+
+const demoGroups: Record<string, GroupMetadataPayload> = {
+  [contacts[1].id]: {
+    id: contacts[1].id,
+    subject: 'Whatsmo Dev Team',
+    description: 'Development discussion for Whatsmo Android app. Keep it on-topic.',
+    participantCount: 6,
+    adminCount: 2,
+    isLocked: false,
+    isAnnouncement: false,
+    creator: 'me',
+    createdAtMs: now - 1000 * 60 * 60 * 24 * 30,
+    participants: [
+      { id: 'me', isAdmin: true },
+      { id: contacts[0].id, phoneNumber: '+62 812-9901-2345', isAdmin: true },
+      { id: contacts[3].id, phoneNumber: '+62 813-0005-6789', isAdmin: false },
+      { id: '6281400099887@s.whatsapp.net', phoneNumber: '+62 814-0009-9887', isAdmin: false },
+      { id: '6281500077665@s.whatsapp.net', phoneNumber: '+62 815-0007-7665', isAdmin: false },
+      { id: '6281600055443@s.whatsapp.net', phoneNumber: '+62 816-0005-5443', isAdmin: false }
+    ]
+  },
+  [contacts[5].id]: {
+    id: contacts[5].id,
+    subject: 'Family 🏠',
+    description: 'Family group chat',
+    participantCount: 12,
+    adminCount: 3,
+    isLocked: false,
+    isAnnouncement: false,
+    participants: [
+      { id: 'me', isAdmin: true },
+      { id: '6281700033221@s.whatsapp.net', phoneNumber: '+62 817-0003-3221', isAdmin: true },
+      { id: '6281800011009@s.whatsapp.net', phoneNumber: '+62 818-0001-1009', isAdmin: true }
+    ]
+  }
+};
 
 const messages: Record<string, ChatMessage[]> = {
   [contacts[0].id]: [
@@ -125,7 +220,7 @@ const messages: Record<string, ChatMessage[]> = {
       chatId: contacts[0].id,
       senderId: contacts[0].id,
       text: 'I tried pairing on a spare number. QR login showed up fine.',
-      timestamp: now - 1000 * 60 * 18,
+      timestamp: now - 1000 * 60 * 30,
       fromMe: false,
       status: 'read'
     },
@@ -133,8 +228,8 @@ const messages: Record<string, ChatMessage[]> = {
       id: 'm2',
       chatId: contacts[0].id,
       senderId: 'me',
-      text: 'Nice. I’m keeping it close to WhatsApp Android first, then we can add the extra stuff later.',
-      timestamp: now - 1000 * 60 * 11,
+      text: "Nice. I'm keeping it close to WhatsApp Android first, then we can add the extra stuff later.",
+      timestamp: now - 1000 * 60 * 25,
       fromMe: true,
       status: 'read'
     },
@@ -142,19 +237,53 @@ const messages: Record<string, ChatMessage[]> = {
       id: 'm3',
       chatId: contacts[0].id,
       senderId: contacts[0].id,
+      text: 'Makes sense. The bubble tails look great btw 👌',
+      timestamp: now - 1000 * 60 * 20,
+      fromMe: false,
+      status: 'read',
+      reactions: [{ emoji: '❤️', senderId: 'me' }]
+    },
+    {
+      id: 'm4',
+      chatId: contacts[0].id,
+      senderId: 'me',
+      text: 'Thanks! Just pushed the UI overhaul. Check it out when you get a chance.',
+      timestamp: now - 1000 * 60 * 15,
+      fromMe: true,
+      status: 'read',
+      edited: true,
+      editHistory: ['Thanks! Just pushed the UI changes.']
+    },
+    {
+      id: 'm5',
+      chatId: contacts[0].id,
+      senderId: contacts[0].id,
       text: 'Can you send the APK build later?',
       timestamp: now - 1000 * 60 * 3,
       fromMe: false,
-      status: 'delivered'
+      status: 'delivered',
+      quotedMessageId: 'm4',
+      quotedSenderName: 'You',
+      quotedText: 'Thanks! Just pushed the UI overhaul. Check it out when you get a chance.'
+    },
+    {
+      id: 'm6',
+      chatId: contacts[0].id,
+      senderId: 'me',
+      text: 'Sure, building now ⏳',
+      timestamp: now - 1000 * 60 * 2,
+      fromMe: true,
+      status: 'sent'
     }
   ],
   [contacts[1].id]: [
     {
       id: 'g1',
       chatId: contacts[1].id,
-      senderId: 'faris',
+      senderId: contacts[0].id,
+      senderName: 'Nadia',
       text: 'Pair code worked on my test number.',
-      timestamp: now - 1000 * 60 * 48,
+      timestamp: now - 1000 * 60 * 60,
       fromMe: false,
       status: 'read'
     },
@@ -163,9 +292,137 @@ const messages: Record<string, ChatMessage[]> = {
       chatId: contacts[1].id,
       senderId: 'me',
       text: 'Good. Next I want to test incoming group messages from the Rust bridge.',
-      timestamp: now - 1000 * 60 * 39,
+      timestamp: now - 1000 * 60 * 55,
       fromMe: true,
       status: 'delivered'
+    },
+    {
+      id: 'g3',
+      chatId: contacts[1].id,
+      senderId: contacts[3].id,
+      senderName: 'Dimas',
+      text: 'I can help test. What do you need?',
+      timestamp: now - 1000 * 60 * 50,
+      fromMe: false,
+      status: 'read',
+      quotedMessageId: 'g2',
+      quotedSenderName: 'You',
+      quotedText: 'Good. Next I want to test incoming group messages from the Rust bridge.'
+    },
+    {
+      id: 'g3b',
+      chatId: contacts[1].id,
+      senderId: '6281500077665@s.whatsapp.net',
+      senderName: 'Andi',
+      text: 'This screenshot looks great!',
+      timestamp: now - 1000 * 60 * 38,
+      fromMe: false,
+      status: 'read',
+      quotedMessageId: 'g5',
+      quotedSenderName: 'Dimas',
+      quotedMediaKind: 'image',
+      quotedMediaPreviewUrl: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="44" height="44"%3E%3Crect fill="%23ccc" width="44" height="44"/%3E%3Ctext x="22" y="24" text-anchor="middle" fill="%23888" font-size="8"%3EIMG%3C/text%3E%3C/svg%3E'
+    },
+    {
+      id: 'g4',
+      chatId: contacts[1].id,
+      senderId: 'me',
+      text: 'Send a few messages — text, image, and a voice note if you can.',
+      timestamp: now - 1000 * 60 * 45,
+      fromMe: true,
+      status: 'read'
+    },
+    {
+      id: 'g5',
+      chatId: contacts[1].id,
+      senderId: contacts[3].id,
+      senderName: 'Dimas',
+      timestamp: now - 1000 * 60 * 40,
+      fromMe: false,
+      status: 'read',
+      media: {
+        id: 'media-screenshot',
+        kind: 'image',
+        name: 'screenshot-2025.png',
+        previewUrl: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="200"%3E%3Crect fill="%23e0e0e0" width="300" height="200"/%3E%3Ctext x="150" y="100" text-anchor="middle" fill="%23999" font-size="14"%3EScreenshot%3C/text%3E%3C/svg%3E',
+        directPath: '/mock/screenshot.png',
+        fileLength: 1_340_000
+      }
+    },
+    {
+      id: 'g6',
+      chatId: contacts[1].id,
+      senderId: '6281400099887@s.whatsapp.net',
+      senderName: 'Faris',
+      text: 'This message was deleted.',
+      timestamp: now - 1000 * 60 * 30,
+      fromMe: false,
+      status: 'read',
+      deleted: true,
+      deletedBySender: true
+    },
+    {
+      id: 'g7',
+      chatId: contacts[1].id,
+      senderId: contacts[3].id,
+      senderName: 'Dimas',
+      text: 'Check the new build 🔥',
+      timestamp: now - 1000 * 60 * 7,
+      fromMe: false,
+      status: 'delivered',
+      reactions: [
+        { emoji: '🔥', senderId: 'me' },
+        { emoji: '🔥', senderId: contacts[0].id },
+        { emoji: '👍', senderId: '6281500077665@s.whatsapp.net' }
+      ]
+    }
+  ],
+  [contacts[4].id]: [
+    {
+      id: 's1',
+      chatId: contacts[4].id,
+      senderId: 'me',
+      text: 'Hey, are you free for a call later?',
+      timestamp: now - 1000 * 60 * 60,
+      fromMe: true,
+      status: 'read'
+    },
+    {
+      id: 's2',
+      chatId: contacts[4].id,
+      senderId: contacts[4].id,
+      text: 'Sure! After 5pm works for me 😊',
+      timestamp: now - 1000 * 60 * 45,
+      fromMe: false,
+      status: 'read'
+    },
+    {
+      id: 's3',
+      chatId: contacts[4].id,
+      senderId: contacts[4].id,
+      timestamp: now - 1000 * 60 * 15,
+      fromMe: false,
+      status: 'delivered',
+      media: {
+        id: 'media-voice',
+        kind: 'audio',
+        name: 'voice-message.webm',
+        ptt: true,
+        directPath: '/mock/voice.webm',
+        fileLength: 48200
+      }
+    },
+    {
+      id: 's4',
+      chatId: contacts[4].id,
+      senderId: 'me',
+      text: 'Got it, will listen later!',
+      timestamp: now - 1000 * 60 * 12,
+      fromMe: true,
+      status: 'sent',
+      quotedMessageId: 's3',
+      quotedSenderName: 'Sari',
+      quotedMediaKind: 'audio'
     }
   ],
   [contacts[2].id]: [
@@ -173,15 +430,117 @@ const messages: Record<string, ChatMessage[]> = {
       id: 'b1',
       chatId: contacts[2].id,
       senderId: contacts[2].id,
-      text: 'Image received from the media event test.',
+      text: 'Here\'s the updated proposal for the project.',
+      timestamp: now - 1000 * 60 * 90,
+      fromMe: false,
+      status: 'read'
+    },
+    {
+      id: 'b2',
+      chatId: contacts[2].id,
+      senderId: contacts[2].id,
       timestamp: now - 1000 * 60 * 80,
       fromMe: false,
       status: 'read',
       media: {
-        id: 'media-1',
-        kind: 'image',
-        name: 'campaign-preview.jpg'
+        id: 'media-doc',
+        kind: 'document',
+        name: 'proposal-v2.pdf',
+        directPath: '/mock/proposal-v2.pdf',
+        fileLength: 2_450_000
       }
+    },
+    {
+      id: 'b3',
+      chatId: contacts[2].id,
+      senderId: 'me',
+      text: 'Got it, will review tonight 👍',
+      timestamp: now - 1000 * 60 * 75,
+      fromMe: true,
+      status: 'read'
+    }
+  ],
+  [contacts[3].id]: [
+    {
+      id: 'd1',
+      chatId: contacts[3].id,
+      senderId: contacts[3].id,
+      text: 'Yo, want to grab lunch tomorrow?',
+      timestamp: now - 1000 * 60 * 180,
+      fromMe: false,
+      status: 'read'
+    },
+    {
+      id: 'd2',
+      chatId: contacts[3].id,
+      senderId: 'me',
+      text: 'Sounds good, let me know 👍',
+      timestamp: now - 1000 * 60 * 120,
+      fromMe: true,
+      status: 'read'
+    }
+  ],
+  [contacts[5].id]: [
+    {
+      id: 'f1',
+      chatId: contacts[5].id,
+      senderId: '6281700033221@s.whatsapp.net',
+      senderName: 'Mom',
+      text: 'Don\'t forget dinner tonight at 7!',
+      timestamp: now - 1000 * 60 * 50,
+      fromMe: false,
+      status: 'read'
+    },
+    {
+      id: 'f2',
+      chatId: contacts[5].id,
+      senderId: '6281800011009@s.whatsapp.net',
+      senderName: 'Dad',
+      text: 'I\'ll pick up the cake on the way home',
+      timestamp: now - 1000 * 60 * 48,
+      fromMe: false,
+      status: 'read',
+      quotedMessageId: 'f1',
+      quotedSenderName: 'Mom',
+      quotedText: 'Don\'t forget dinner tonight at 7!'
+    },
+    {
+      id: 'f3',
+      chatId: contacts[5].id,
+      senderId: 'me',
+      text: 'I\'ll be there! 🎂',
+      timestamp: now - 1000 * 60 * 45,
+      fromMe: true,
+      status: 'delivered',
+      reactions: [
+        { emoji: '❤️', senderId: '6281700033221@s.whatsapp.net' },
+        { emoji: '😊', senderId: '6281800011009@s.whatsapp.net' }
+      ]
+    }
+  ]
+};
+
+const demoStatuses: Record<string, ChatMessage[]> = {
+  [contacts[0].id]: [
+    {
+      id: 'status-1',
+      chatId: contacts[0].id,
+      senderId: contacts[0].id,
+      text: 'Beautiful sunset today 🌅',
+      timestamp: now - 1000 * 60 * 60 * 2,
+      fromMe: false,
+      status: 'read'
+    }
+  ],
+  [contacts[4].id]: [
+    {
+      id: 'status-2',
+      chatId: contacts[4].id,
+      senderId: contacts[4].id,
+      text: 'Working on something exciting! Stay tuned 🚀',
+      timestamp: now - 1000 * 60 * 60 * 4,
+      fromMe: false,
+      status: 'delivered'
     }
   ]
 };
@@ -737,7 +1096,9 @@ export function ingestIncomingMessage(payload: IncomingMessagePayload): void {
     media: normalizeMediaAttachment(payload.media),
     quotedMessageId: payload.quotedMessageId,
     quotedSenderName: payload.quotedSenderName ? resolveMessageSenderName(currentState, payload.quotedSenderName, undefined) : undefined,
-    quotedText: payload.quotedText
+    quotedText: payload.quotedText,
+    quotedMediaKind: payload.quotedMediaKind,
+    quotedMediaPreviewUrl: payload.quotedMediaPreviewUrl
   };
 
   if (payload.chatId === 'status@broadcast') {
@@ -1127,7 +1488,9 @@ function messageFromIncomingPayload(payload: IncomingMessagePayload): ChatMessag
     media: normalizeMediaAttachment(payload.media),
     quotedMessageId: payload.quotedMessageId,
     quotedSenderName: payload.quotedSenderName ? resolveMessageSenderName(state, payload.quotedSenderName, undefined) : undefined,
-    quotedText: payload.quotedText
+    quotedText: payload.quotedText,
+    quotedMediaKind: payload.quotedMediaKind,
+    quotedMediaPreviewUrl: payload.quotedMediaPreviewUrl
   };
 }
 
@@ -1324,15 +1687,15 @@ function createInitialState(): AppModel {
     historySync: null,
     chats: shouldSeedPreview ? chats : [],
     messages: shouldSeedPreview ? messages : {},
-    statuses: {},
+    statuses: shouldSeedPreview ? demoStatuses : {},
     contacts: shouldSeedPreview ? contacts : [],
-    groups: {},
+    groups: shouldSeedPreview ? demoGroups : {},
     selectedChatId: shouldSeedPreview ? chats[0]?.id ?? '' : '',
     notificationEnabled: false,
     showGroupAvatars: true,
     theme: 'system',
     chatEphemeralDefaults: {},
-    powerFeatures: defaultPowerFeatures
+    powerFeatures: shouldSeedPreview ? { antiDelete: true, antiEdit: true, autoForwardDeleted: false, forwardTargetId: '' } : defaultPowerFeatures
   };
 }
 
