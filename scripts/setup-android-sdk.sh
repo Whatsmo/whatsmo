@@ -28,13 +28,13 @@ if [ ! -x "$SDKMANAGER" ]; then
 fi
 
 echo "Accepting Android SDK licenses..."
-yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses >/dev/null
+yes 2>/dev/null | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses >/dev/null 2>&1 || true
 
 echo "Installing Android SDK packages into $ANDROID_HOME..."
-yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
+"$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
   "platform-tools" \
   "platforms;android-36" \
   "build-tools;35.0.0" \
-  "ndk;27.0.12077973"
+  "ndk;27.0.12077973" 
 
 echo "Android SDK ready at $ANDROID_HOME"
