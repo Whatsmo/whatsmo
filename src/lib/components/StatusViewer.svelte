@@ -162,8 +162,8 @@
 
   .progress-container {
     display: flex;
-    gap: 4px;
-    padding: max(16px, env(safe-area-inset-top)) 8px 8px 8px;
+    gap: 3px;
+    padding: max(12px, env(safe-area-inset-top)) 6px 6px 6px;
     position: absolute;
     top: 0;
     left: 0;
@@ -173,16 +173,17 @@
 
   .progress-segment {
     flex: 1;
-    height: 3px;
-    background: rgba(255, 255, 255, 0.3);
-    border-radius: 2px;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.35);
+    border-radius: 1px;
     overflow: hidden;
   }
 
   .progress-fill {
     height: 100%;
     background: #fff;
-    border-radius: 2px;
+    border-radius: 1px;
+    transition: width 0.1s linear;
   }
 
   .viewer-header {
@@ -216,14 +217,14 @@
   }
 
   .name {
-    font-weight: 600;
-    font-size: 1rem;
+    font-weight: 500;
+    font-size: 0.9375rem;
     text-shadow: 0 1px 2px rgba(0,0,0,0.5);
   }
 
   .time {
-    font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.75);
     text-shadow: 0 1px 2px rgba(0,0,0,0.5);
   }
 

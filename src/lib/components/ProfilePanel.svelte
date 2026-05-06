@@ -47,25 +47,24 @@
   .profile-panel {
     display: grid;
     align-content: start;
-    gap: 14px;
+    gap: 0;
     min-height: 0;
     overflow-y: auto;
-    padding: 18px;
-    border-radius: 34px;
-    color: #061f1a;
-    background: rgba(247, 255, 246, 0.7);
-    backdrop-filter: blur(24px);
+    -webkit-overflow-scrolling: touch;
+    padding: 0;
+    border-radius: 0;
+    color: var(--ink);
+    background: var(--app-bg);
   }
 
   .hero {
     display: grid;
     place-items: center;
-    height: 150px;
-    border-radius: 28px;
+    height: 120px;
+    border-radius: 0;
     color: white;
-    font-size: 4rem;
-    font-weight: 1000;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+    font-size: 3rem;
+    font-weight: 500;
   }
 
   h2,
@@ -76,62 +75,95 @@
   }
 
   h2 {
-    font-family: var(--display-font);
-    font-size: 2rem;
-    line-height: 1;
-    letter-spacing: -0.05em;
+    font-size: 1.25rem;
+    font-weight: 500;
+    line-height: 1.2;
   }
 
   p,
   li,
   span {
-    color: rgba(6, 31, 26, 0.62);
-    line-height: 1.45;
+    color: var(--muted);
+    font-size: 0.8125rem;
+    line-height: 1.4;
   }
 
   .stats {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    gap: 0;
+    border-bottom: 8px solid var(--app-bg);
   }
 
   .stats div,
   section {
-    padding: 14px;
-    border-radius: 22px;
-    background: rgba(255, 255, 255, 0.62);
+    padding: 12px 16px;
+    border-radius: 0;
+    background: var(--paper);
+  }
+
+  .stats div + div {
+    border-left: 1px solid var(--border-color);
   }
 
   strong {
     display: block;
-    font-size: 1.3rem;
-    font-weight: 1000;
+    font-size: 1.125rem;
+    font-weight: 500;
+    color: var(--ink);
   }
 
   .action-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    padding: 8px 0;
+    background: var(--paper);
+    border-bottom: 8px solid var(--app-bg);
   }
 
   button {
-    min-height: 44px;
+    min-height: 48px;
     border: 0;
-    border-radius: 16px;
-    color: #075e54;
+    border-radius: 0;
+    color: var(--wa-green-dark);
     font: inherit;
-    font-weight: 1000;
-    background: rgba(18, 140, 126, 0.1);
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: transparent;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+
+  button:active {
+    background: color-mix(in srgb, var(--ink) 4%, transparent);
   }
 
   h3 {
-    margin-bottom: 10px;
-    font-size: 0.9rem;
+    margin-bottom: 6px;
+    padding: 12px 16px 0;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--muted);
   }
 
   ul {
     display: grid;
-    gap: 8px;
-    padding-left: 18px;
+    gap: 0;
+    padding: 0;
+    list-style: none;
+    background: var(--paper);
+  }
+
+  ul li {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  ul li:last-child {
+    border-bottom: 0;
   }
 </style>

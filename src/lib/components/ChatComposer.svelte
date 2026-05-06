@@ -119,7 +119,7 @@
     display: flex;
     align-items: flex-end;
     gap: 6px;
-    padding: 4px 10px 8px;
+    padding: 4px 8px 6px;
     background: transparent;
     position: relative;
   }
@@ -128,13 +128,13 @@
     flex: 1;
     display: flex;
     align-items: center;
-    max-width: calc(100% - 58px);
-    border: 1px solid transparent;
+    max-width: calc(100% - 52px);
+    border: 0;
     background: var(--message-in);
-    border-radius: 24px;
+    border-radius: 22px;
     padding: 2px 4px;
-    min-height: 46px;
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-color) 55%, transparent);
+    min-height: 44px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.06);
   }
 
   button,
@@ -147,11 +147,11 @@
   input {
     flex: 1;
     min-width: 0;
-    min-height: 40px;
+    min-height: 38px;
     padding: 0 4px;
     color: var(--ink);
     background: transparent;
-    font-size: 1.05rem;
+    font-size: 1rem;
   }
 
   input::placeholder {
@@ -173,35 +173,35 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background-color 0.2s ease, transform 0.15s ease;
+    transition: background-color 0.15s ease, transform 0.12s ease;
   }
 
   .ghost {
-    width: 38px;
-    height: 38px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     color: var(--muted);
     background: transparent;
-    font-size: 1.4rem;
+    font-size: 1.35rem;
     flex-shrink: 0;
   }
 
   .ghost:active {
-    background: rgba(0, 0, 0, 0.05);
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
   }
 
   .send {
-    width: 46px;
-    height: 46px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
     color: white;
-    font-size: 1.4rem;
+    font-size: 1.35rem;
     background: var(--wa-green-dark);
     flex-shrink: 0;
   }
 
   .send:active {
-    transform: scale(0.95);
+    transform: scale(0.92);
   }
 
   .send.recording {
@@ -211,28 +211,33 @@
 
   .attach-sheet {
     position: absolute;
-    left: 10px;
-    right: 64px;
-    bottom: 62px;
+    left: 8px;
+    right: 60px;
+    bottom: 56px;
     z-index: 8;
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-    padding: 10px;
-    border-radius: 20px;
+    gap: 6px;
+    padding: 8px;
+    border-radius: 16px;
     background: var(--paper);
-    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.22);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
   }
 
   .attach-sheet button {
-    min-height: 42px;
-    border-radius: 14px;
+    min-height: 40px;
+    border-radius: 12px;
     color: var(--ink);
-    font-weight: 850;
+    font-size: 0.875rem;
+    font-weight: 600;
+    background: var(--border-color);
+  }
+
+  .attach-sheet button:active {
     background: var(--nav-active);
   }
 
   @keyframes pulse {
-    50% { transform: scale(0.94); }
+    50% { transform: scale(0.92); }
   }
 </style>

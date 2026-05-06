@@ -128,15 +128,30 @@
   {#if showSenderName && message.senderName}
     <p class="sender-name">{message.senderName}</p>
   {/if}
-  {#if message.quotedMessageId && (message.quotedText || message.quotedSenderName)}
+  {#if message.quotedMessageId && (message.quotedText || message.quotedSenderName || message.quotedMediaKind)}
     <button class="quoted-preview" type="button" on:click|stopPropagation={() => onScrollToMessage(message.quotedMessageId ?? '')}>
       <div class="quoted-bar"></div>
       <div class="quoted-content">
         {#if message.quotedSenderName}
           <strong class="quoted-sender">{message.quotedSenderName}</strong>
         {/if}
-        <p class="quoted-text">{message.quotedText ?? 'Media message'}</p>
+        {#if message.quotedMediaKind && !message.quotedText}
+          <p class="quoted-text quoted-media-label">
+            <Icon name={message.quotedMediaKind === 'image' ? 'photo_camera' : message.quotedMediaKind === 'video' ? 'videocam' : message.quotedMediaKind === 'audio' ? 'mic' : message.quotedMediaKind === 'sticker' ? 'emoji_emotions' : 'insert_drive_file'} size="14px" />
+            {message.quotedMediaKind === 'image' ? 'Photo' : message.quotedMediaKind === 'video' ? 'Video' : message.quotedMediaKind === 'audio' ? 'Audio' : message.quotedMediaKind === 'sticker' ? 'Sticker' : 'Document'}
+          </p>
+        {:else}
+          <p class="quoted-text">
+            {#if message.quotedMediaKind}
+              <Icon name={message.quotedMediaKind === 'image' ? 'photo_camera' : message.quotedMediaKind === 'video' ? 'videocam' : message.quotedMediaKind === 'audio' ? 'mic' : 'insert_drive_file'} size="14px" />
+            {/if}
+            {message.quotedText ?? 'Message'}
+          </p>
+        {/if}
       </div>
+      {#if message.quotedMediaPreviewUrl}
+        <img class="quoted-thumb" src={message.quotedMediaPreviewUrl} alt="" />
+      {/if}
     </button>
   {/if}
   {#if message.deleted && !message.deletedBySender}
@@ -177,18 +192,39 @@
 
           {#if canDownload}
             <div class="download-overlay" aria-hidden="true">
-              <span><Icon name="download" size="28px" /></span>
+              <div class="download-circle">
+                <svg viewBox="0 0 48 48">
+                  <circle cx="24" cy="24" r="20" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2.5" />
+                  <circle cx="24" cy="24" r="20" fill="none" stroke="white" stroke-width="2.5" stroke-dasharray="126" stroke-dashoffset="126" stroke-linecap="round" />
+                </svg>
+                <Icon name="download" size="20px" />
+              </div>
+              {#if message.media?.fileLength}
+                <span class="download-size">{(message.media.fileLength / (1024 * 1024)).toFixed(1)} MB</span>
+              {/if}
             </div>
           {/if}
         </div>
       {:else if message.media.kind === 'audio'}
-        <div class="file-tile audio-tile">
-          <span><Icon name="mic" size="24px" /></span>
-          <strong>{message.media.ptt ? 'Voice message' : 'Audio'}</strong>
+        <div class="audio-player" class:ptt={message.media.ptt}>
+          <button class="audio-play-btn" type="button" aria-label="Play">
+            <Icon name={message.media.cachedDataUrl ? 'play_arrow' : 'download'} size="22px" />
+          </button>
+          <div class="audio-track">
+            <div class="audio-waveform">
+              {#each Array(28) as _, i}
+                <span style="height: {12 + Math.sin(i * 0.7) * 8 + Math.random() * 6}px"></span>
+              {/each}
+            </div>
+            <div class="audio-meta">
+              <span class="audio-duration">{message.media.ptt ? '0:23' : 'Audio'}</span>
+              {#if !message.media.cachedDataUrl && canDownload}
+                <span class="audio-size">Download</span>
+              {/if}
+            </div>
+          </div>
           {#if message.media.cachedDataUrl}
-            <audio src={message.media.cachedDataUrl} controls></audio>
-          {:else}
-            <small>{canDownload ? 'Download to listen' : message.status === 'queued' ? 'Sending…' : 'Audio attachment'}</small>
+            <audio src={message.media.cachedDataUrl} class="audio-hidden"></audio>
           {/if}
         </div>
       {:else}
@@ -246,18 +282,18 @@
 <style>
   .bubble {
     justify-self: start;
-    max-width: 85%;
-    padding: 6px 10px 8px;
+    max-width: 82%;
+    padding: 6px 8px 6px;
     border-radius: 0 8px 8px 8px;
     color: var(--ink);
     background: var(--message-in);
-    box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.13);
-    animation: rise 160ms ease both;
+    box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.08);
+    animation: rise 140ms ease both;
     word-wrap: break-word;
     overflow-wrap: break-word;
     position: relative;
     margin-left: 8px;
-    transition: transform 180ms ease;
+    transition: transform 160ms ease;
     touch-action: pan-y;
   }
 
@@ -323,7 +359,7 @@
 
   p {
     margin: 0;
-    font-size: 0.95rem;
+    font-size: 0.9375rem;
     line-height: 1.35;
   }
 
@@ -331,12 +367,12 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 4px;
-    margin-top: 2px;
+    gap: 3px;
+    margin-top: 1px;
     margin-bottom: -2px;
     color: var(--muted);
-    font-size: 0.7rem;
-    font-weight: 500;
+    font-size: 0.6875rem;
+    font-weight: 400;
   }
 
   .status-tick {
@@ -485,33 +521,54 @@
 
   .quoted-sender {
     color: var(--wa-green-dark);
-    font-size: 0.8rem;
-    font-weight: 600;
+    font-size: 0.75rem;
+    font-weight: 500;
   }
 
   .quoted-text {
     margin: 0;
     color: var(--muted);
-    font-size: 0.84rem;
+    font-size: 0.8125rem;
     line-height: 1.3;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 1;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+
+  .quoted-text :global(.icon) {
+    vertical-align: -2px;
+    margin-right: 2px;
+    opacity: 0.7;
+  }
+
+  .quoted-media-label {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    color: var(--muted);
+  }
+
+  .quoted-thumb {
+    width: 44px;
+    height: 44px;
+    border-radius: 4px;
+    object-fit: cover;
+    flex-shrink: 0;
   }
 
   .retry-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 28px;
-    margin-top: 6px;
+    min-height: 26px;
+    margin-top: 4px;
     border: 0;
-    border-radius: 14px;
-    padding: 0 16px;
+    border-radius: 13px;
+    padding: 0 12px;
     color: white;
     font: inherit;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     font-weight: 500;
     background: #ea4335;
     cursor: pointer;
@@ -520,28 +577,29 @@
   .reaction-chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
-    margin-top: 4px;
+    gap: 3px;
+    margin-top: 3px;
   }
 
   .reaction-chip {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
-    padding: 2px 7px;
+    gap: 2px;
+    padding: 2px 6px;
     border-radius: 999px;
-    font-size: 0.82rem;
-    background: color-mix(in srgb, var(--ink) 8%, transparent);
+    font-size: 0.75rem;
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
   }
 
   .media-card {
     display: block;
-    width: min(280px, 75vw);
-    min-width: 180px;
-    min-height: 74px;
-    margin: 2px -4px 6px -4px;
+    width: min(260px, 72vw);
+    min-width: 160px;
+    min-height: 60px;
+    margin: 2px -2px 4px -2px;
     border: 0;
-    border-radius: 6px;
+    border-radius: 8px;
     padding: 0;
     overflow: hidden;
     color: inherit;
@@ -553,16 +611,16 @@
   }
 
   .media-card.visual-media {
-    min-height: 180px;
+    min-height: 160px;
     background: transparent;
   }
 
   .visual-frame {
     position: relative;
     width: 100%;
-    min-height: 180px;
+    min-height: 160px;
     overflow: hidden;
-    border-radius: 6px;
+    border-radius: 8px;
     background: var(--border-color);
   }
 
@@ -572,43 +630,58 @@
   .empty-visual {
     width: 100%;
     height: 100%;
-    min-height: 180px;
-    max-height: 340px;
+    min-height: 160px;
+    max-height: 300px;
     display: block;
     object-fit: cover;
   }
 
   .visual-frame .sticker-image {
     object-fit: contain;
-    padding: 10px;
+    padding: 8px;
     background: transparent;
   }
 
   .media-card.preview-only .visual-frame img,
   .media-card.preview-only .visual-frame video,
   .media-card.preview-only .empty-visual {
-    filter: blur(12px) saturate(0.82) brightness(0.68);
-    transform: scale(1.04);
+    filter: blur(14px) saturate(0.7) brightness(0.6);
+    transform: scale(1.06);
   }
 
   .download-overlay {
     position: absolute;
     inset: 0;
-    display: grid;
-    place-items: center;
-    background: rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: rgba(0, 0, 0, 0.3);
   }
 
-  .download-overlay span {
+  .download-circle {
+    position: relative;
+    width: 44px;
+    height: 44px;
     display: grid;
     place-items: center;
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
     color: white;
-    font-size: 1.5rem;
-    font-weight: 400;
-    background: rgba(0, 0, 0, 0.5);
+  }
+
+  .download-circle svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+  }
+
+  .download-size {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    color: white;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   }
 
   .media-name {
@@ -628,28 +701,30 @@
     grid-template-areas:
       "badge name"
       "badge hint";
-    gap: 2px 12px;
+    gap: 2px 10px;
     align-items: center;
-    padding: 12px;
+    padding: 10px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--ink) 4%, transparent);
   }
 
   .file-tile span {
     grid-area: badge;
     display: grid;
     place-items: center;
-    min-width: 44px;
-    height: 44px;
-    border-radius: 50%;
+    min-width: 40px;
+    height: 40px;
+    border-radius: 8px;
     color: white;
     font-size: 0.75rem;
     font-weight: 500;
-    background: var(--wa-green-dark, #008069);
+    background: var(--wa-green-dark);
   }
 
   .file-tile strong {
     grid-area: name;
     color: var(--ink);
-    font-size: 0.95rem;
+    font-size: 0.8125rem;
     font-weight: 400;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -659,13 +734,81 @@
   .file-tile small {
     grid-area: hint;
     color: var(--muted);
-    font-size: 0.8rem;
+    font-size: 0.6875rem;
   }
 
-  .audio-tile audio {
-    grid-column: 2;
-    width: 100%;
-    min-width: 180px;
+  .audio-player {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    min-width: 220px;
+  }
+
+  .audio-player.ptt {
+    min-width: 200px;
+  }
+
+  .audio-play-btn {
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--wa-green-dark);
+    color: white;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+
+  .audio-play-btn:active {
+    transform: scale(0.92);
+  }
+
+  .audio-track {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .audio-waveform {
+    display: flex;
+    align-items: center;
+    gap: 1.5px;
+    height: 24px;
+  }
+
+  .audio-waveform span {
+    flex: 1;
+    min-width: 2px;
+    max-width: 3px;
+    border-radius: 1.5px;
+    background: var(--muted);
+    opacity: 0.5;
+  }
+
+  .audio-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .audio-duration {
+    font-size: 0.6875rem;
+    color: var(--muted);
+  }
+
+  .audio-size {
+    font-size: 0.6875rem;
+    color: var(--wa-green-dark);
+    font-weight: 500;
+  }
+
+  .audio-hidden {
+    display: none;
   }
 
   @keyframes rise {
