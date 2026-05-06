@@ -196,27 +196,27 @@
     display: grid;
     grid-template-rows: auto auto 1fr;
     min-height: 0;
-    background: var(--paper, #fbfbf6);
+    background: var(--paper);
   }
 
   .search {
     display: grid;
     grid-template-columns: auto 1fr;
     align-items: center;
-    gap: 12px;
-    margin: 4px 16px 12px;
-    padding: 0 16px;
-    border-radius: 24px;
+    gap: 10px;
+    margin: 6px 14px 6px;
+    padding: 0 14px;
+    border-radius: 20px;
     color: var(--muted);
     background: var(--border-color);
   }
 
   .search input {
-    min-height: 44px;
+    min-height: 36px;
     border: 0;
     color: var(--ink);
     font: inherit;
-    font-size: 0.95rem;
+    font-size: 0.875rem;
     outline: none;
     background: transparent;
   }
@@ -227,8 +227,8 @@
 
   .filters {
     display: flex;
-    gap: 8px;
-    margin: 0 16px 12px;
+    gap: 6px;
+    margin: 2px 14px 6px;
     overflow-x: auto;
     scrollbar-width: none;
   }
@@ -240,13 +240,15 @@
   .filters button {
     flex: 0 0 auto;
     border: 0;
-    padding: 6px 16px;
+    padding: 0 14px;
+    height: 32px;
     border-radius: 16px;
-    color: var(--muted);
-    font-size: 0.9rem;
+    color: var(--ink);
+    font-size: 0.8125rem;
     font-weight: 500;
     background: var(--border-color);
     cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
   }
 
   .filters button.active {
@@ -259,61 +261,63 @@
     align-content: start;
     min-height: 0;
     overflow-y: auto;
-    padding-bottom: 8px;
+    -webkit-overflow-scrolling: touch;
   }
 
   .empty-chats {
     display: grid;
     justify-items: center;
     align-content: center;
-    gap: 9px;
+    gap: 8px;
     min-height: 260px;
-    padding: 28px;
-    color: #667781;
+    padding: 32px;
+    color: var(--muted);
     text-align: center;
   }
 
   .empty-chats div {
     display: grid;
     place-items: center;
-    width: 68px;
-    height: 68px;
+    width: 64px;
+    height: 64px;
     border-radius: 999px;
-    color: var(--wa-green, #008069);
-    font-size: 1.8rem;
-    background: #e7f6ef;
+    color: var(--wa-green);
+    font-size: 1.6rem;
+    background: var(--nav-active);
   }
 
   .empty-chats strong {
-    color: var(--ink, #101f1b);
-    font-size: 1rem;
+    color: var(--ink);
+    font-size: 0.9375rem;
+    font-weight: 500;
   }
 
   .empty-chats p {
     max-width: 240px;
     margin: 0;
-    line-height: 1.42;
+    font-size: 0.8125rem;
+    line-height: 1.45;
   }
 
   .skeleton-list {
     display: grid;
-    gap: 16px;
-    padding: 12px 16px;
+    padding: 0 14px;
   }
 
   .skeleton-row {
     display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 16px;
+    grid-template-columns: 52px 1fr;
+    gap: 14px;
     align-items: center;
+    height: 72px;
   }
 
   .skeleton-avatar {
-    width: 50px;
-    height: 50px;
+    width: 52px;
+    height: 52px;
     border-radius: 50%;
     background: var(--border-color);
-    animation: pulse 1.5s infinite ease-in-out;
+    animation: pulse 1.4s infinite ease-in-out;
   }
 
   .skeleton-lines {
@@ -322,63 +326,67 @@
   }
 
   .skeleton-line-title {
-    height: 16px;
-    width: 40%;
-    border-radius: 8px;
+    height: 14px;
+    width: 45%;
+    border-radius: 7px;
     background: var(--border-color);
-    animation: pulse 1.5s infinite ease-in-out;
+    animation: pulse 1.4s infinite ease-in-out;
   }
 
   .skeleton-line-subtitle {
-    height: 14px;
-    width: 70%;
-    border-radius: 7px;
+    height: 12px;
+    width: 65%;
+    border-radius: 6px;
     background: var(--border-color);
-    animation: pulse 1.5s infinite ease-in-out;
+    animation: pulse 1.4s infinite ease-in-out;
     opacity: 0.6;
   }
 
   @keyframes pulse {
     0% { opacity: 1; }
-    50% { opacity: 0.4; }
+    50% { opacity: 0.35; }
     100% { opacity: 1; }
   }
 
   .chat-row {
     display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 16px;
+    grid-template-columns: 52px 1fr;
+    gap: 14px;
     width: 100%;
+    height: 72px;
     border: 0;
     border-radius: 0;
-    padding: 12px 16px;
+    padding: 0 14px;
     color: var(--ink);
     text-align: left;
     background: transparent;
     cursor: pointer;
     touch-action: manipulation;
     user-select: none;
+    align-items: center;
+    transition: background 0.1s ease;
   }
 
   .chat-row:active {
-    background: var(--nav-active);
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
   }
 
   .chat-row.selected {
-    background: var(--nav-active);
+    background: color-mix(in srgb, var(--wa-green) 8%, transparent);
   }
 
   .avatar {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 50px;
-    height: 50px;
+    width: 52px;
+    height: 52px;
     border-radius: 50%;
     color: white;
-    font-size: 1.2rem;
+    font-size: 1.25rem;
     font-weight: 500;
     overflow: hidden;
+    flex-shrink: 0;
   }
 
   .avatar.has-image {
@@ -396,22 +404,31 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
+    gap: 2px;
   }
 
-  .chat-row__title,
+  .chat-row__title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
   .chat-row__meta {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 8px;
   }
 
   .chat-row__title strong {
-    font-weight: 500;
-    font-size: 1.05rem;
+    font-weight: 400;
+    font-size: 1.0625rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .chat-row__title strong,
   .chat-row__meta span {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -419,38 +436,41 @@
   }
 
   time {
+    flex-shrink: 0;
     color: var(--muted);
     font-size: 0.75rem;
     font-weight: 400;
   }
 
   .chat-row__meta {
-    margin-top: 2px;
     color: var(--muted);
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
   }
 
   .chat-row__meta span.typing {
     color: var(--wa-green);
-    font-weight: 600;
+    font-weight: 500;
   }
 
   .chat-row__meta small {
+    flex-shrink: 0;
     color: var(--muted);
+    font-size: 0.75rem;
   }
 
   .chat-row__meta b {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 22px;
-    height: 22px;
-    padding: 0 6px;
-    border-radius: 11px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: 10px;
     color: var(--paper);
-    font-size: 0.7rem;
-    font-weight: 600;
+    font-size: 0.6875rem;
+    font-weight: 700;
     background: var(--wa-green);
+    flex-shrink: 0;
   }
 
   .action-backdrop {
@@ -459,7 +479,13 @@
     z-index: 40;
     display: grid;
     align-items: end;
-    background: rgba(0, 0, 0, 0.35);
+    background: rgba(0, 0, 0, 0.4);
+    animation: fadeIn 0.15s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 
   .action-dismiss {
@@ -475,44 +501,50 @@
     display: grid;
     margin: 0 auto;
     width: min(100%, 430px);
-    border-radius: 28px 28px 0 0;
-    padding: 24px 0 max(16px, calc(16px + var(--safe-bottom)));
+    border-radius: 20px 20px 0 0;
+    padding: 20px 0 max(16px, calc(12px + var(--safe-bottom)));
     background: var(--paper);
-    box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.15);
+    animation: slideUp 0.2s ease;
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
   }
 
   .action-title {
     display: grid;
-    gap: 4px;
-    margin-bottom: 12px;
-    padding: 0 24px;
+    gap: 2px;
+    margin-bottom: 8px;
+    padding: 0 20px;
   }
 
   .action-title strong {
     color: var(--ink);
-    font-size: 1.2rem;
+    font-size: 1.0625rem;
     font-weight: 500;
   }
 
   .action-title span {
     color: var(--muted);
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
   }
 
   .action-sheet button {
-    min-height: 56px;
+    min-height: 52px;
     border: 0;
-    padding: 0 24px;
+    padding: 0 20px;
     color: var(--ink);
     font: inherit;
-    font-size: 1rem;
-    font-weight: 500;
+    font-size: 0.9375rem;
+    font-weight: 400;
     text-align: left;
     background: transparent;
-    transition: background 0.2s ease;
+    transition: background 0.1s ease;
   }
 
   .action-sheet button:active {
-    background: var(--border-color);
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
   }
 </style>

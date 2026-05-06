@@ -65,7 +65,13 @@
     z-index: 50;
     display: grid;
     align-items: end;
-    background: rgba(0, 0, 0, 0.35);
+    background: rgba(0, 0, 0, 0.4);
+    animation: fadeIn 0.12s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 
   .context-dismiss {
@@ -79,32 +85,39 @@
     position: relative;
     z-index: 1;
     display: grid;
-    gap: 4px;
+    gap: 0;
     margin: 0 auto;
     width: min(100%, 430px);
-    border-radius: 26px 26px 0 0;
-    padding: 14px 12px max(14px, calc(10px + var(--safe-bottom, 0px)));
+    border-radius: 20px 20px 0 0;
+    padding: 8px 0 max(8px, calc(6px + var(--safe-bottom, 0px)));
     background: var(--paper);
-    box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.15);
+    animation: slideUp 0.18s ease;
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
   }
 
   .context-sheet button {
     display: flex;
     align-items: center;
-    gap: 14px;
-    min-height: 50px;
+    gap: 16px;
+    min-height: 48px;
     border: 0;
-    border-radius: 14px;
-    padding: 0 16px;
+    border-radius: 0;
+    padding: 0 20px;
     color: var(--ink);
     font: inherit;
-    font-size: 0.95rem;
-    font-weight: 500;
+    font-size: 0.9375rem;
+    font-weight: 400;
     text-align: left;
     background: transparent;
+    transition: background 0.1s ease;
   }
 
   .context-sheet button:active {
-    background: var(--nav-active);
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
   }
 </style>
