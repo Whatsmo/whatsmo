@@ -83,6 +83,8 @@ export interface ChatMessage {
   quotedMessageId?: string;
   quotedSenderName?: string;
   quotedText?: string;
+  quotedMediaKind?: MediaKind;
+  quotedMediaPreviewUrl?: string;
   reactions?: Array<{ emoji: string; senderId: string }>;
   deletedBySender?: boolean;
   editHistory?: string[];
@@ -153,6 +155,8 @@ export interface IncomingMessagePayload {
   quotedMessageId?: string;
   quotedSenderName?: string;
   quotedText?: string;
+  quotedMediaKind?: MediaKind;
+  quotedMediaPreviewUrl?: string;
 }
 
 export interface IncomingReactionPayload {
