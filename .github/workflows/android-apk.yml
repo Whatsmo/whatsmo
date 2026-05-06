@@ -67,7 +67,9 @@ jobs:
         run: bun run check
 
       - name: Check Rust backend
-        run: cargo check --manifest-path src-tauri/Cargo.toml
+        run: cargo check --manifest-path src-tauri/Cargo.toml --target aarch64-linux-android
+        env:
+          ANDROID_NDK_HOME: ${{ github.workspace }}/.local/android-sdk/ndk/27.0.12077973
 
       - name: Build signed release-test APK
         run: scripts/build-release-test-apk.sh
