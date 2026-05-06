@@ -60,30 +60,28 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    background: var(--app-bg, #efeae2);
+    background: var(--app-bg);
   }
 
   .scroll-area {
     flex: 1;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 16px;
+    gap: 8px;
+    padding: 12px;
   }
 
-  /* ─── Sync Banner ─── */
   .sync-banner {
-    padding: 14px 16px;
-    border-radius: 16px;
-    background: var(--paper, white);
-    border: 1px solid var(--border-color, #e9edef);
-    transition: border-color 0.3s, box-shadow 0.3s;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: var(--paper);
+    transition: box-shadow 0.2s ease;
   }
 
   .sync-banner.active {
-    border-color: color-mix(in srgb, var(--wa-green, #25d366) 40%, transparent);
-    box-shadow: 0 2px 12px rgba(0, 128, 105, 0.06);
+    box-shadow: 0 1px 4px rgba(0, 128, 105, 0.08);
   }
 
   .sync-row {
@@ -94,7 +92,7 @@
 
   .sync-icon {
     flex-shrink: 0;
-    color: var(--wa-green, #008069);
+    color: var(--wa-green-dark);
   }
 
   .sync-body {
@@ -104,90 +102,88 @@
 
   .sync-body strong {
     display: block;
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--ink, #111b21);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--ink);
     margin-bottom: 1px;
   }
 
   .sync-body span {
     display: block;
-    font-size: 0.78rem;
-    color: var(--muted, #667781);
+    font-size: 0.75rem;
+    color: var(--muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   .sync-pct {
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: var(--wa-green, #008069);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--wa-green-dark);
     flex-shrink: 0;
   }
 
   .progress-track {
-    height: 3px;
-    margin-top: 12px;
-    border-radius: 2px;
-    background: var(--border-color, #e9edef);
+    height: 2px;
+    margin-top: 10px;
+    border-radius: 1px;
+    background: var(--border-color);
     overflow: hidden;
   }
 
   .progress-thumb {
     height: 100%;
-    border-radius: 2px;
-    background: var(--wa-green, #008069);
-    transition: width 0.4s ease;
+    border-radius: 1px;
+    background: var(--wa-green-dark);
+    transition: width 0.3s ease;
   }
 
   .spinner {
     display: block;
     width: 18px;
     height: 18px;
-    border: 2px solid var(--border-color, #e9edef);
-    border-top-color: var(--wa-green, #008069);
+    border: 2px solid var(--border-color);
+    border-top-color: var(--wa-green-dark);
     border-radius: 50%;
-    animation: spin 0.9s linear infinite;
+    animation: spin 0.8s linear infinite;
   }
 
   @keyframes spin {
     to { transform: rotate(360deg); }
   }
 
-  /* ─── Auth Card ─── */
   .auth-card {
-    padding: 20px;
-    border-radius: 18px;
-    background: var(--paper, white);
-    border: 1px solid var(--border-color, #e9edef);
+    padding: 16px;
+    border-radius: 12px;
+    background: var(--paper);
   }
 
-  /* ─── Info Footer ─── */
   .info-footer {
-    padding: 8px 4px 24px;
+    padding: 8px 4px 20px;
   }
 
   .info-row {
     display: flex;
-    gap: 12px;
+    gap: 10px;
     align-items: flex-start;
   }
 
   .info-icon {
     flex-shrink: 0;
-    color: var(--muted, #8696a0);
+    color: var(--muted);
     padding-top: 1px;
   }
 
   .info-row p {
     margin: 0;
-    font-size: 0.78rem;
-    color: var(--muted, #8696a0);
-    line-height: 1.5;
+    font-size: 0.75rem;
+    color: var(--muted);
+    line-height: 1.45;
   }
 
   .info-row p strong {
-    color: var(--muted, #667781);
+    color: var(--muted);
+    font-weight: 500;
   }
 </style>

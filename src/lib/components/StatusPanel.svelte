@@ -508,11 +508,12 @@
   .status-panel {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
     height: 100%;
     overflow-y: auto;
-    padding: 16px;
-    background: var(--paper, #fbfbf6);
+    -webkit-overflow-scrolling: touch;
+    padding: 12px 14px;
+    background: var(--paper);
     position: relative;
   }
 
@@ -520,19 +521,24 @@
 
   .status-row {
     display: flex;
-    gap: 16px;
+    gap: 12px;
     overflow-x: auto;
-    padding-bottom: 8px;
-    margin-left: -4px;
-    padding-left: 4px;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+    margin-left: -2px;
+    padding-left: 2px;
+  }
+
+  .status-row::-webkit-scrollbar {
+    display: none;
   }
 
   .status-item {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
-    width: 68px;
+    gap: 6px;
+    width: 64px;
     border: 0;
     padding: 0;
     color: inherit;
@@ -544,23 +550,23 @@
 
   .avatar-wrapper {
     position: relative;
-    width: 60px;
-    height: 60px;
+    width: 56px;
+    height: 56px;
     display: flex;
     align-items: center;
     justify-content: center;
   }
 
   .avatar {
-    width: 52px;
-    height: 52px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     color: white;
-    font-size: 1.3rem;
-    font-weight: 600;
+    font-size: 1.2rem;
+    font-weight: 500;
     z-index: 1;
     overflow: hidden;
   }
@@ -572,27 +578,27 @@
   }
 
   .my-avatar {
-    background: #cfd9df;
-    color: #667781;
+    background: var(--border-color);
+    color: var(--muted);
   }
 
   .contact-avatar {
-    border: 2px solid var(--paper, #fbfbf6);
+    border: 2px solid var(--paper);
   }
 
   .add-badge {
     position: absolute;
     bottom: 0;
     right: 0;
-    width: 22px;
-    height: 22px;
-    background: var(--wa-green, #008069);
+    width: 20px;
+    height: 20px;
+    background: var(--wa-green-dark);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     color: white;
-    border: 2px solid var(--paper, #fbfbf6);
+    border: 2px solid var(--paper);
     z-index: 2;
   }
 
@@ -606,8 +612,8 @@
   }
 
   .status-name {
-    font-size: 0.8rem;
-    color: var(--ink, #101f1b);
+    font-size: 0.6875rem;
+    color: var(--ink);
     text-align: center;
     white-space: nowrap;
     overflow: hidden;
@@ -687,39 +693,38 @@
     align-items: center;
     justify-content: center;
     width: 56px;
-    height: 56px;
-    border-radius: 16px; /* Material 3 square-rounded */
+    height: 52px;
+    border-radius: 14px;
     border: none;
     color: white;
-    background: var(--wa-green, #008069);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    background: var(--wa-green-dark);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition: transform 0.15s ease;
   }
 
   .fab.small {
-    width: 48px;
-    height: 48px;
-    border-radius: 14px;
-    background: var(--nav-active, #e7f6ef);
-    color: var(--ink, #101f1b);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: var(--border-color);
+    color: var(--ink);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
   }
 
   .fab:active {
-    transform: scale(0.95);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    transform: scale(0.93);
   }
 
   /* Immersive Compose Modal */
   .compose-modal {
-    position: absolute;
+    position: fixed;
     inset: 0;
-    z-index: 100;
-    background: var(--paper, #fbfbf6);
+    z-index: 9999;
+    background: var(--paper);
     display: flex;
     flex-direction: column;
-    animation: slideInUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    animation: slideInUp 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
   .compose-modal.text-mode {
@@ -735,7 +740,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: calc(12px + var(--safe-top, 0px)) 16px 12px;
+    padding: calc(10px + var(--safe-top, 0px)) 12px 8px;
     z-index: 10;
   }
 
@@ -760,8 +765,8 @@
   }
 
   .icon-btn {
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     display: grid;
     place-items: center;
     border: none;
@@ -769,6 +774,7 @@
     border-radius: 50%;
     color: inherit;
     cursor: pointer;
+    font-size: 1.3rem;
   }
 
   .compose-header.transparent .icon-btn {
@@ -1044,69 +1050,76 @@
 
   .field {
     display: grid;
-    gap: 7px;
+    gap: 6px;
   }
 
   .field span {
-    color: var(--ink, #101f1b);
-    font-size: 0.82rem;
-    font-weight: 900;
+    color: var(--ink);
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  .field.compact {
+    gap: 4px;
   }
 
   textarea,
   input,
   select {
     width: 100%;
-    border: 1px solid var(--border-color, #e2e7e3);
-    border-radius: 12px;
-    color: var(--ink, #101f1b);
+    border: 0;
+    border-radius: 20px;
+    color: var(--ink);
     font: inherit;
+    font-size: 0.875rem;
     outline: none;
-    background: transparent;
-    padding: 12px;
-    transition: border-color 0.2s ease;
+    background: var(--border-color);
+    padding: 10px 14px;
+    transition: box-shadow 0.15s ease;
   }
 
   textarea:focus,
   input:focus,
   select:focus {
-    border-color: var(--wa-green, #008069);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--wa-green-dark) 25%, transparent);
   }
 
   textarea {
-    min-height: 92px;
+    min-height: 80px;
+    border-radius: 12px;
     resize: vertical;
   }
 
   input,
   select {
-    min-height: 46px;
+    min-height: 40px;
   }
-
-
-
 
 
   button:disabled {
-    color: var(--muted, #667781);
-    background: var(--border-color, #e7ece8);
+    color: var(--muted);
+    background: var(--border-color);
     cursor: not-allowed;
+    opacity: 0.6;
   }
 
   .success {
-    color: var(--wa-green, #008069);
-    font-weight: 850;
+    color: var(--wa-green-dark);
+    font-size: 0.8125rem;
+    font-weight: 500;
   }
 
   .unsupported {
-    padding: 12px;
-    border-radius: 18px;
+    padding: 10px 12px;
+    border-radius: 10px;
     color: #5f4b00;
+    font-size: 0.8125rem;
     background: #fff4c2;
   }
 
   .error {
     color: #b3261e;
-    font-weight: 850;
+    font-size: 0.8125rem;
+    font-weight: 500;
   }
 </style>
