@@ -1475,6 +1475,9 @@ async fn start_session(
 
                 match &event {
                     Event::PairingQrCode { code, .. } => {
+                        if phone_number.is_some() {
+                            return;
+                        }
                         {
                             let mut guard = state.lock().await;
                             guard.connected = false;
