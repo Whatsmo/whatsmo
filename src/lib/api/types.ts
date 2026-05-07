@@ -68,6 +68,26 @@ export interface MediaAttachment {
   ptt?: boolean;
 }
 
+export interface PollData {
+  question: string;
+  options: string[];
+  selectableCount: number;
+}
+
+export interface LocationData {
+  latitude: number;
+  longitude: number;
+  name?: string;
+  address?: string;
+  isLive?: boolean;
+}
+
+export interface ContactData {
+  displayName: string;
+  phone?: string;
+  vcard?: string;
+}
+
 export interface ChatMessage {
   id: string;
   chatId: string;
@@ -88,6 +108,11 @@ export interface ChatMessage {
   reactions?: Array<{ emoji: string; senderId: string }>;
   deletedBySender?: boolean;
   editHistory?: string[];
+  isForwarded?: boolean;
+  forwardingScore?: number;
+  poll?: PollData;
+  location?: LocationData;
+  contact?: ContactData;
 }
 
 export interface ChatSummary {
@@ -157,6 +182,11 @@ export interface IncomingMessagePayload {
   quotedText?: string;
   quotedMediaKind?: MediaKind;
   quotedMediaPreviewUrl?: string;
+  isForwarded?: boolean;
+  forwardingScore?: number;
+  poll?: PollData;
+  location?: LocationData;
+  contact?: ContactData;
 }
 
 export interface IncomingReactionPayload {
