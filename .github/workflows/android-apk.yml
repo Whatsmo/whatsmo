@@ -66,6 +66,9 @@ jobs:
       - name: Check frontend
         run: bun run check
 
+      - name: Build frontend
+        run: bun run build
+
       - name: Check Rust backend
         run: |
           export NDK_TOOLCHAIN="$GITHUB_WORKSPACE/.local/android-sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/linux-x86_64"
