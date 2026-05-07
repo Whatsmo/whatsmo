@@ -478,6 +478,57 @@ const messages: Record<string, ChatMessage[]> = {
       timestamp: now - 1000 * 60 * 120,
       fromMe: true,
       status: 'read'
+    },
+    {
+      id: 'd3',
+      chatId: contacts[3].id,
+      senderId: contacts[3].id,
+      text: 'Check out this place for lunch',
+      timestamp: now - 1000 * 60 * 110,
+      fromMe: false,
+      status: 'read',
+      location: {
+        latitude: -6.2088,
+        longitude: 106.8456,
+        name: 'Warung Nasi Padang',
+        address: 'Jl. Sudirman No. 42, Jakarta'
+      }
+    },
+    {
+      id: 'd4',
+      chatId: contacts[3].id,
+      senderId: contacts[3].id,
+      timestamp: now - 1000 * 60 * 100,
+      fromMe: false,
+      status: 'read',
+      poll: {
+        question: 'Where should we eat?',
+        options: ['Nasi Padang', 'Sushi', 'Pizza', 'Bakso'],
+        selectableCount: 1
+      }
+    },
+    {
+      id: 'd5',
+      chatId: contacts[3].id,
+      senderId: contacts[3].id,
+      timestamp: now - 1000 * 60 * 95,
+      fromMe: false,
+      status: 'read',
+      isForwarded: true,
+      forwardingScore: 5,
+      text: 'FYI: Office closed tomorrow due to holiday 🎉'
+    },
+    {
+      id: 'd6',
+      chatId: contacts[3].id,
+      senderId: contacts[3].id,
+      timestamp: now - 1000 * 60 * 90,
+      fromMe: false,
+      status: 'read',
+      contact: {
+        displayName: 'Rina Kusuma',
+        phone: '+62 812-3456-7890'
+      }
     }
   ],
   [contacts[5].id]: [
@@ -1098,7 +1149,12 @@ export function ingestIncomingMessage(payload: IncomingMessagePayload): void {
     quotedSenderName: payload.quotedSenderName ? resolveMessageSenderName(currentState, payload.quotedSenderName, undefined) : undefined,
     quotedText: payload.quotedText,
     quotedMediaKind: payload.quotedMediaKind,
-    quotedMediaPreviewUrl: payload.quotedMediaPreviewUrl
+    quotedMediaPreviewUrl: payload.quotedMediaPreviewUrl,
+    isForwarded: payload.isForwarded,
+    forwardingScore: payload.forwardingScore,
+    poll: payload.poll,
+    location: payload.location,
+    contact: payload.contact
   };
 
   if (payload.chatId === 'status@broadcast') {
@@ -1490,7 +1546,12 @@ function messageFromIncomingPayload(payload: IncomingMessagePayload): ChatMessag
     quotedSenderName: payload.quotedSenderName ? resolveMessageSenderName(state, payload.quotedSenderName, undefined) : undefined,
     quotedText: payload.quotedText,
     quotedMediaKind: payload.quotedMediaKind,
-    quotedMediaPreviewUrl: payload.quotedMediaPreviewUrl
+    quotedMediaPreviewUrl: payload.quotedMediaPreviewUrl,
+    isForwarded: payload.isForwarded,
+    forwardingScore: payload.forwardingScore,
+    poll: payload.poll,
+    location: payload.location,
+    contact: payload.contact
   };
 }
 
