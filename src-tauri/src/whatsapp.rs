@@ -171,6 +171,16 @@ pub struct IncomingMessagePayload {
     quoted_sender_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     quoted_text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    is_forwarded: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    forwarding_score: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    poll: Option<PollPayload>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    location: Option<LocationPayload>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    contact: Option<ContactPayload>,
 }
 
 #[derive(Clone, Serialize)]
@@ -197,6 +207,37 @@ pub struct MediaAttachmentPayload {
     view_once: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     ptt: Option<bool>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PollPayload {
+    question: String,
+    options: Vec<String>,
+    selectable_count: u32,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocationPayload {
+    latitude: f64,
+    longitude: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    is_live: Option<bool>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContactPayload {
+    display_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    phone: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    vcard: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -1572,6 +1613,7 @@ async fn start_session(
 
                         let (quoted_id, quoted_sender, quoted_text_val) =
                             extract_quote_context(&message);
+                        let (is_forwarded, forwarding_score) = extract_forwarded_info(&message);
                         let payload = IncomingMessagePayload {
                             id: info.id.to_string(),
                             chat_id: chat_id.clone(),
@@ -1591,6 +1633,11 @@ async fn start_session(
                             quoted_message_id: quoted_id,
                             quoted_sender_name: quoted_sender,
                             quoted_text: quoted_text_val,
+                            is_forwarded,
+                            forwarding_score,
+                            poll: extract_poll_payload(&message),
+                            location: extract_location_payload(&message),
+                            contact: extract_contact_payload(&message),
                         };
                         emit_event(&app, "whatsmo://message", payload);
                     }
@@ -1933,6 +1980,7 @@ fn history_message_payload(
         .or_else(|| message.get_caption().map(ToString::to_string));
 
     let (quoted_id, quoted_sender, quoted_text_val) = extract_quote_context(message);
+    let (is_forwarded, forwarding_score) = extract_forwarded_info(message);
     Some(IncomingMessagePayload {
         id: id.clone(),
         chat_id,
@@ -1951,6 +1999,11 @@ fn history_message_payload(
         quoted_message_id: quoted_id,
         quoted_sender_name: quoted_sender,
         quoted_text: quoted_text_val,
+        is_forwarded,
+        forwarding_score,
+        poll: extract_poll_payload(message),
+        location: extract_location_payload(message),
+        contact: extract_contact_payload(message),
     })
 }
 
@@ -2012,6 +2065,83 @@ fn preferred_sender_jid<'a>(sender: &'a Jid, sender_alt: Option<&'a Jid>) -> &'a
     } else {
         sender
     }
+}
+
+fn extract_forwarded_info(message: &wa::Message) -> (Option<bool>, Option<u32>) {
+    let base = message.get_base_message();
+    let ctx = base
+        .extended_text_message
+        .as_ref()
+        .and_then(|ext| ext.context_info.as_ref())
+        .or_else(|| base.image_message.as_ref().and_then(|m| m.context_info.as_ref()))
+        .or_else(|| base.video_message.as_ref().and_then(|m| m.context_info.as_ref()))
+        .or_else(|| base.document_message.as_ref().and_then(|m| m.context_info.as_ref()))
+        .or_else(|| base.audio_message.as_ref().and_then(|m| m.context_info.as_ref()));
+
+    match ctx {
+        Some(ctx) if ctx.is_forwarded == Some(true) => {
+            (Some(true), ctx.forwarding_score)
+        }
+        _ => (None, None),
+    }
+}
+
+fn extract_poll_payload(message: &wa::Message) -> Option<PollPayload> {
+    let base = message.get_base_message();
+    let poll = base
+        .poll_creation_message
+        .as_ref()
+        .or(base.poll_creation_message_v2.as_ref())
+        .or(base.poll_creation_message_v3.as_ref())?;
+
+    let question = poll.name.clone().unwrap_or_default();
+    let options: Vec<String> = poll
+        .options
+        .iter()
+        .filter_map(|opt| opt.option_name.clone())
+        .collect();
+    let selectable_count = poll.selectable_options_count.unwrap_or(0) as u32;
+
+    Some(PollPayload {
+        question,
+        options,
+        selectable_count,
+    })
+}
+
+fn extract_location_payload(message: &wa::Message) -> Option<LocationPayload> {
+    let base = message.get_base_message();
+    let loc = base.location_message.as_ref()?;
+
+    Some(LocationPayload {
+        latitude: loc.degrees_latitude?,
+        longitude: loc.degrees_longitude?,
+        name: loc.name.clone(),
+        address: loc.address.clone(),
+        is_live: None,
+    })
+}
+
+fn extract_contact_payload(message: &wa::Message) -> Option<ContactPayload> {
+    let base = message.get_base_message();
+    let contact = base.contact_message.as_ref()?;
+
+    let display_name = contact.display_name.clone().unwrap_or_else(|| "Contact".to_string());
+    let phone = contact
+        .vcard
+        .as_ref()
+        .and_then(|vc| {
+            vc.lines()
+                .find(|line| line.starts_with("TEL"))
+                .and_then(|line| line.split(':').last())
+                .map(|s| s.trim().to_string())
+        });
+
+    Some(ContactPayload {
+        display_name,
+        phone,
+        vcard: contact.vcard.clone(),
+    })
 }
 
 fn media_attachment_payload(
