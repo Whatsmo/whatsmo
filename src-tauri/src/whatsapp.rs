@@ -3,6 +3,7 @@ use std::{sync::Arc, time::Duration};
 use chrono::Utc;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State, async_runtime::JoinHandle};
+use tauri_plugin_notification::NotificationExt;
 use tokio::sync::Mutex;
 use wacore::{
     download::MediaType,
@@ -250,7 +251,7 @@ pub struct DownloadedMediaPayload {
     data: Vec<u8>,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum MessageEventKind {
     Message,
@@ -1639,7 +1640,25 @@ async fn start_session(
                             location: extract_location_payload(&message),
                             contact: extract_contact_payload(&message),
                         };
-                        emit_event(&app, "whatsmo://message", payload);
+                        emit_event(&app, "whatsmo://message", payload.clone());
+
+                        if !payload.from_me && payload.event_kind == MessageEventKind::Message {
+                            let notif_title = payload.sender_name.as_deref().unwrap_or("New message");
+                            let notif_body = payload.text.as_deref()
+                                .or_else(|| payload.poll.as_ref().map(|p| p.question.as_str()))
+                                .or_else(|| payload.location.as_ref().and_then(|l| l.name.as_deref()))
+                                .or_else(|| payload.contact.as_ref().map(|c| c.display_name.as_str()))
+                                .unwrap_or(if payload.media.is_some() { "Media" } else { "Message" });
+
+                            let _ = app.notification()
+                                .builder()
+                                .title(notif_title)
+                                .body(notif_body)
+                                .group(&payload.chat_id)
+                                .extra("chatId", &payload.chat_id)
+                                .auto_cancel()
+                                .show();
+                        }
                     }
                     Event::JoinedGroup(conversation) => {
                         if let Some(payload) = history_sync_payload(conversation) {
@@ -1963,9 +1982,10 @@ fn history_message_payload(
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| fallback_chat_id.to_string());
     let from_me = key.from_me.unwrap_or(false);
+    let is_status_broadcast = chat_id == "status@broadcast";
     let sender_id = if from_me {
         "me".to_string()
-    } else if is_group {
+    } else if is_group || is_status_broadcast {
         key.participant
             .clone()
             .or_else(|| web_message.participant.clone())
@@ -2437,5 +2457,46 @@ where
 {
     if let Err(error) = app.emit(event, payload) {
         eprintln!("failed to emit {event}: {error}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_phone_valid() {
+        assert_eq!(normalize_phone("6281299012345").unwrap(), "6281299012345");
+        assert_eq!(normalize_phone("+62 812-9901-2345").unwrap(), "6281299012345");
+        assert_eq!(normalize_phone("62 857 1100 4321").unwrap(), "6285711004321");
+    }
+
+    #[test]
+    fn normalize_phone_rejects_short() {
+        assert!(normalize_phone("12345").is_err());
+    }
+
+    #[test]
+    fn normalize_phone_rejects_leading_zero() {
+        assert!(normalize_phone("081299012345").is_err());
+    }
+
+    #[test]
+    fn seconds_to_millis_converts() {
+        assert_eq!(seconds_to_millis(1700000000), 1700000000000);
+        assert_eq!(seconds_to_millis(0), 0);
+    }
+
+    #[test]
+    fn non_empty_string_filters() {
+        assert_eq!(non_empty_string("hello"), Some("hello".to_string()));
+        assert_eq!(non_empty_string(""), None);
+        assert_eq!(non_empty_string("   "), None);
+    }
+
+    #[test]
+    fn chat_title_from_jid_formats() {
+        assert_eq!(chat_title_from_jid("6281299012345@s.whatsapp.net"), "+6281299012345");
+        assert_eq!(chat_title_from_jid("team@g.us"), "team");
     }
 }

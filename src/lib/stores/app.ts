@@ -30,7 +30,6 @@ import {
   getAccountDevice,
   getSessionStatus,
   isTauriRuntime,
-  notifyNewMessage,
   resumeSavedSession,
   sendMediaMessage,
   sendTextMessage,
@@ -1172,11 +1171,6 @@ export function ingestIncomingMessage(payload: IncomingMessagePayload): void {
   }
   scheduleContactProfileSync([payload.senderId, payload.isGroup ? '' : payload.chatId]);
 
-  const state = get(appState);
-  const chat = state.chats.find((item) => item.id === payload.chatId);
-  if (state.notificationEnabled && chat && !payload.fromMe && !chat.muted) {
-    notifyNewMessage(chat.title, payload.text ?? 'New WhatsApp message', payload.chatId);
-  }
 }
 
 function applyMessageEdit(payload: IncomingMessagePayload): void {
