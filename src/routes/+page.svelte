@@ -456,6 +456,11 @@
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--wa-green-dark) 25%, transparent);
   }
 
+  :global(*:focus-visible) {
+    outline: 2px solid var(--wa-green-dark);
+    outline-offset: 2px;
+  }
+
   :global(::selection) {
     color: #061f1a;
     background: #25d366;
