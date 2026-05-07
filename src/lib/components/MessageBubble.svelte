@@ -128,6 +128,12 @@
   {#if showSenderName && message.senderName}
     <p class="sender-name">{message.senderName}</p>
   {/if}
+  {#if message.isForwarded}
+    <p class="forwarded-label">
+      <Icon name="forward" size="12px" />
+      Forwarded{message.forwardingScore && message.forwardingScore > 4 ? ' many times' : ''}
+    </p>
+  {/if}
   {#if message.quotedMessageId && (message.quotedText || message.quotedSenderName || message.quotedMediaKind)}
     <button class="quoted-preview" type="button" on:click|stopPropagation={() => onScrollToMessage(message.quotedMessageId ?? '')}>
       <div class="quoted-bar"></div>
@@ -238,6 +244,58 @@
         <strong class="media-name">{message.media.name}</strong>
       {/if}
     </button>
+  {/if}
+  {#if message.poll}
+    <div class="poll-card">
+      <div class="poll-header">
+        <Icon name="ballot" size="18px" />
+        <strong>{message.poll.question}</strong>
+      </div>
+      <div class="poll-options">
+        {#each message.poll.options as option}
+          <div class="poll-option">
+            <span class="poll-radio"></span>
+            <span>{option}</span>
+          </div>
+        {/each}
+      </div>
+      {#if message.poll.selectableCount > 1}
+        <span class="poll-hint">Select up to {message.poll.selectableCount}</span>
+      {/if}
+    </div>
+  {/if}
+  {#if message.location}
+    <a class="location-card" href="https://maps.google.com/?q={message.location.latitude},{message.location.longitude}" target="_blank" rel="noopener" on:click|stopPropagation>
+      <div class="location-map">
+        <Icon name="location_on" size="28px" />
+      </div>
+      <div class="location-info">
+        {#if message.location.name}
+          <strong>{message.location.name}</strong>
+        {/if}
+        {#if message.location.address}
+          <span>{message.location.address}</span>
+        {:else}
+          <span>{message.location.latitude.toFixed(5)}, {message.location.longitude.toFixed(5)}</span>
+        {/if}
+        {#if message.location.isLive}
+          <span class="location-live">Live location</span>
+        {/if}
+      </div>
+    </a>
+  {/if}
+  {#if message.contact}
+    <div class="contact-card">
+      <div class="contact-avatar">
+        <Icon name="person" size="24px" />
+      </div>
+      <div class="contact-info">
+        <strong>{message.contact.displayName}</strong>
+        {#if message.contact.phone}
+          <span>{message.contact.phone}</span>
+        {/if}
+      </div>
+    </div>
   {/if}
   {#if message.text && !message.deleted && !message.deletedBySender}
     <p>{message.text}</p>
@@ -809,6 +867,149 @@
 
   .audio-hidden {
     display: none;
+  }
+
+  .forwarded-label {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin: 0 0 2px;
+    color: var(--muted);
+    font-size: 0.6875rem;
+    font-style: italic;
+  }
+
+  .poll-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 4px 0;
+    min-width: 200px;
+  }
+
+  .poll-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--ink);
+  }
+
+  .poll-header strong {
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  .poll-options {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .poll-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--ink) 4%, transparent);
+    font-size: 0.8125rem;
+    color: var(--ink);
+  }
+
+  .poll-radio {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--muted);
+    flex-shrink: 0;
+  }
+
+  .poll-hint {
+    font-size: 0.6875rem;
+    color: var(--muted);
+  }
+
+  .location-card {
+    display: flex;
+    gap: 10px;
+    padding: 4px 0;
+    text-decoration: none;
+    color: inherit;
+    min-width: 200px;
+  }
+
+  .location-map {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--wa-green) 12%, transparent);
+    color: var(--wa-green-dark);
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+  }
+
+  .location-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .location-info strong {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .location-info span {
+    font-size: 0.75rem;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .location-live {
+    color: var(--wa-green-dark);
+    font-weight: 500;
+  }
+
+  .contact-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    min-width: 180px;
+  }
+
+  .contact-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--ink) 8%, transparent);
+    color: var(--muted);
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+  }
+
+  .contact-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .contact-info strong {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .contact-info span {
+    font-size: 0.75rem;
+    color: var(--muted);
   }
 
   @keyframes rise {
