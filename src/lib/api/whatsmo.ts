@@ -467,3 +467,34 @@ export async function connectBridge(handlers: BridgeHandlers): Promise<UnlistenF
     }
   };
 }
+
+export interface DeviceContact {
+  name: string;
+  phone: string;
+}
+
+export async function getDeviceContacts(): Promise<DeviceContact[]> {
+  if (!isTauriRuntime()) {
+    return [];
+  }
+
+  try {
+    const result = await invoke<{ contacts: string }>('plugin:contacts|get_contacts');
+    return JSON.parse(result.contacts) as DeviceContact[];
+  } catch {
+    return [];
+  }
+}
+
+export async function checkContactsPermission(): Promise<boolean> {
+  if (!isTauriRuntime()) {
+    return false;
+  }
+
+  try {
+    const result = await invoke<{ granted: boolean }>('plugin:contacts|check_permission');
+    return result.granted;
+  } catch {
+    return false;
+  }
+}
