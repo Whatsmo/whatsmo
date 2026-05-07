@@ -67,9 +67,13 @@ jobs:
         run: bun run check
 
       - name: Check Rust backend
-        run: cargo check --manifest-path src-tauri/Cargo.toml --target aarch64-linux-android
-        env:
-          ANDROID_NDK_HOME: ${{ github.workspace }}/.local/android-sdk/ndk/27.0.12077973
+        run: |
+          export NDK_TOOLCHAIN="$GITHUB_WORKSPACE/.local/android-sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/linux-x86_64"
+          export PATH="$NDK_TOOLCHAIN/bin:$PATH"
+          export CC_aarch64_linux_android="$NDK_TOOLCHAIN/bin/aarch64-linux-android34-clang"
+          export AR_aarch64_linux_android="$NDK_TOOLCHAIN/bin/llvm-ar"
+          export ANDROID_NDK_HOME="$GITHUB_WORKSPACE/.local/android-sdk/ndk/27.0.12077973"
+          cargo check --manifest-path src-tauri/Cargo.toml --target aarch64-linux-android
 
       - name: Build signed release-test APK
         run: scripts/build-release-test-apk.sh
